@@ -1,0 +1,23 @@
+instance                                       n   B     obj      UB    %UB   time  check
+skillvrp_n50_v2_s3_k0.0_1.txt                 50   2    1793    2717  66.0%  29.2s     OK
+skillvrp_n75_v2_s4_k0.5_2.txt                 75   2    2784    4255  65.4%  29.3s     OK
+skillvrp_n100_v2_s5_k1.0_3.txt               100   2    3004    5160  58.2%  29.3s     OK
+skillvrp_n125_v3_s6_k1.5_4.txt               125   3    4223    6866  61.5%  29.3s     OK
+skillvrp_n150_v3_s8_k2.0_5.txt               150   3    4936    8259  59.8%  29.3s     OK
+skillvrp_n200_v5_s3_k0.0_6.txt               200   5    7487   10236  73.1%  29.3s     OK
+skillvrp_n250_v6_s4_k0.5_7.txt               250   6    9874   14034  70.4%  29.3s     OK
+skillvrp_n300_v7_s5_k1.0_8.txt               300   7   11450   16729  68.4%  29.3s     OK
+skillvrp_n350_v8_s6_k1.5_9.txt               350   8   12583   19050  66.1%  29.3s     OK
+skillvrp_n400_v10_s8_k2.0_10.txt             400  10   12741   22335  57.0%  29.3s     OK
+skillvrp_n450_v11_s3_k0.0_11.txt             450  11   14155   24478  57.8%  29.3s     OK
+skillvrp_n500_v12_s4_k0.5_12.txt             500  12   17620   27820  63.3%  29.3s     OK
+skillvrp_n600_v15_s5_k1.0_13.txt             600  15   21177   32477  65.2%  29.3s     OK
+skillvrp_n700_v17_s6_k1.5_14.txt             700  17   23758   37852  62.8%  29.3s     OK
+skillvrp_n750_v18_s8_k2.0_15.txt             750  18   25217   40329  62.5%  29.3s     OK
+skillvrp_n800_v20_s3_k0.0_16.txt             800  20   25491   43128  59.1%  29.3s     OK
+skillvrp_n850_v21_s4_k0.5_17.txt             850  21   29875   46190  64.7%  29.3s     OK
+skillvrp_n900_v22_s5_k1.0_18.txt             900  22   28660   49703  57.7%  29.3s     OK
+skillvrp_n950_v23_s6_k1.5_19.txt             950  23   29349   52946  55.4%  29.3s     OK
+skillvrp_n1000_v25_s8_k2.0_20.txt           1000  25   35781   54664  65.5%  29.3s     OK
+
+Average %UB: 63.0%   infeasible: 0
