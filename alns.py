@@ -413,20 +413,15 @@ def build_destroy_result(
 
 # Destroy operators
 
-## Hier dran orientieren für destroy operatoren:
-# Im prinzip könnt ihr die class Copy pasten, umbenennen und an den markierten stellen anpassen.
-
-class RandomRemoval(DestroyOperator): #Namen anpassen
+class RandomRemoval(DestroyOperator):
     def __init__(
         self,
-        #Hier anpassen, je nachdem welche variablen euer destroy braucht
         fraction: float,
         min_remove: int,
         max_remove: int,
-        initial_weight: float, # Initial weight sollte immer als variable vorhanden sein für späteres tuning der finalen version
+        initial_weight: float,
     ):
-        super().__init__("random_removal", initial_weight) # hier den tag benennen
-        #Hier anpassen, je nachdem welche variablen euer destroy braucht
+        super().__init__("random_removal", initial_weight)
         self.fraction = fraction
         self.min_remove = min_remove
         self.max_remove = max_remove
@@ -440,11 +435,10 @@ class RandomRemoval(DestroyOperator): #Namen anpassen
     ) -> DestroyResult:
         served = served_customers(solution)
 
-        #Das ist nur ein fallback. Eig sollten wir nie einen fall haben, wo keine customer bedient werden 
+        # Fallback: should not normally trigger, an empty solution has nothing to destroy.
         if not served:
             return build_destroy_result(inst, solution, [], "random_removal", penalties)
-        
-        #Könnte ihr behalten wenn eine bestimmte anzahl an customern removed werden soll (ist ja meist der fall).
+
         q = number_to_remove(
             n_served=len(served),
             fraction=self.fraction,
@@ -452,9 +446,9 @@ class RandomRemoval(DestroyOperator): #Namen anpassen
             max_remove=self.max_remove,
         )
 
-        removed = rng.sample(served, q) # Hier muss dann eine liste removed erstellt werden, mit allen customern die aus der current solution entfernt werden sollen
+        removed = rng.sample(served, q)
 
-        return build_destroy_result(inst, solution, removed, "random_removal", penalties) # hier dann auch den tag namen anpassen
+        return build_destroy_result(inst, solution, removed, "random_removal", penalties)
 
 
 
@@ -503,6 +497,79 @@ class WorstDensityRemoval(DestroyOperator):
         removed = ranked[:q]
 
         return build_destroy_result(inst, solution, removed, "worst_density_removal", penalties)
+
+
+class SkillScarcityRemoval(DestroyOperator):
+    """Removes served customers that are occupying a courier whose skill set
+    is in high demand among the currently-unserved customers, weighted by
+    how little profit they themselves contribute.
+
+    RandomRemoval and WorstDensityRemoval only ever reason about travel
+    distance/profit density; neither looks at skills at all, even though
+    skill compatibility is the defining constraint of this problem variant.
+    The idea here: if a courier with a rare skill set is currently tied up
+    serving a low-profit customer while several unserved customers would
+    also need exactly that skill set, that courier's time is a contested
+    resource. Removing the low-profit occupant gives the repair step a
+    chance to reassign that capacity to a more profitable customer who
+    needs the same scarce skill -- a swap that distance-based operators
+    cannot "see" because it has nothing to do with route geometry.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        noise: float,
+        initial_weight: float,
+    ):
+        super().__init__("skill_scarcity_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+        self.noise = noise
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "skill_scarcity_removal", penalties)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+        )
+
+        # demand_per_vehicle[b] = how many currently-unserved customers could
+        # courier b serve, skill-wise. High demand -> b's time is contested.
+        demand_per_vehicle = [0] * inst.num_vehicles
+        for c in solution.unserved:
+            for vehicle in inst.skill_feasible_vehicles[c]:
+                demand_per_vehicle[vehicle] += 1
+
+        def scarcity_score(c: int) -> float:
+            vehicle = solution.customer_to_vehicle[c]
+            demand = demand_per_vehicle[vehicle]
+            return inst.profit[c] / (1.0 + demand)
+
+        # Low score first: low profit on a high-demand courier is removed first.
+        ranked = sorted(
+            served,
+            key=lambda c: scarcity_score(c) + self.noise * rng.random(),
+        )
+
+        removed = ranked[:q]
+
+        return build_destroy_result(inst, solution, removed, "skill_scarcity_removal", penalties)
 
 
 
@@ -702,22 +769,19 @@ def build_repair_candidates(
 # Repair operators
 
 
-## Hier beispiel fpr repair operator.
-#Hieran orientieren. 
-
 class GreedyBestInsertionRepair(RepairOperator):
-    requires = {"customer_pool"}  #Hier den richtigen tag verwenden, was der repair operator braucht, um zu funktionieren (wenn bspw ein repair operator nur für bestimmte destroy operatoren ausgelegt ist, wird die verknüpfung mit dem tag hergestellt)
+    # Repair operators declare which destroy-result tags they need to run;
+    # "customer_pool" means "a list of customers available for insertion".
+    requires = {"customer_pool"}
 
     def __init__(
         self,
-        # Hier anpassen welche vars euer repair braucht (initial weight behalten)
         extra_unserved_limit: int,
         max_insertions: int | None,
         min_delta_score: float,
         initial_weight: float,
     ):
         super().__init__("greedy_best_insertion", initial_weight)
-        # Hier anpassen welche vars euer repair braucht
         self.extra_unserved_limit = extra_unserved_limit
         self.max_insertions = max_insertions
         self.min_delta_score = min_delta_score
@@ -731,9 +795,9 @@ class GreedyBestInsertionRepair(RepairOperator):
     ) -> Solution:
         solution = destroy_result.partial_solution
 
-
-        ##Hier dann repair schritt einbauen. Wichtig ist nur dass ihr apply_insertion zum einsetzen verwendet, oder etwas alternatives baut wo der cache geupdated wird. Also apply insertion ist eher für einzelne änderung ausgelegt aber für starke änderungen vmtl. etwas ineffizient
-
+        # apply_insertion() keeps the route-cache in sync after each single
+        # insertion; fine here since repair only inserts a bounded candidate
+        # list, but would need a batched cache update for larger changes.
         candidates = build_repair_candidates(
             inst=inst,
             solution=solution,
