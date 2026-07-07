@@ -65,8 +65,8 @@ def build_operators(inst):
 
     destroy_operators = []
 
-    for fraction, max_remove in ((small, 40), (large, 70)):
-        destroy_operators.extend([
+    for label, fraction, max_remove in (("small", small, 40), ("large", large, 70)):
+        variants = [
             RandomRemoval(
                 fraction=fraction,
                 min_remove=1,
@@ -87,7 +87,10 @@ def build_operators(inst):
                 bias=3.0,
                 initial_weight=1.0,
             ),
-        ])
+        ]
+        for op in variants:
+            op.name += "_" + label
+        destroy_operators.extend(variants)
 
     destroy_operators.extend([
         WorstDensityRemoval(
