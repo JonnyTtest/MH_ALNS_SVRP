@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import re
 
 
 @dataclass
@@ -54,41 +55,49 @@ class Instance:
 
     @classmethod
     def from_file(cls, path: str) -> "Instance":
-        header = {}
-        sections = {}
-        current_section = None
-
+        """Whitespace-agnostic parser: any two values may be separated by one
+        or more blanks, tabs or newlines (as the project spec allows), so the
+        file is parsed as a flat token stream instead of line by line.
+        Underscores are normalized to spaces first, which also accepts the
+        "NODE SECTION" / "NUM SKILLS" keyword spellings."""
         with open(path, "r", encoding="utf-8-sig") as f:
-            for raw in f:
-                line = raw.strip()
+            raw = f.read()
 
-                if not line:
+        tokens = raw.replace("_", " ").split()
+        upper = [t.upper() for t in tokens]
+
+        def find_marker(words: list[str], start: int = 0, end: int | None = None) -> int:
+            if end is None:
+                end = len(upper)
+            span = len(words)
+            for idx in range(start, end - span + 1):
+                if upper[idx:idx + span] == words:
+                    return idx
+            return -1
+
+        node_marker = find_marker(["NODE", "SECTION"])
+        vehicle_marker = find_marker(["VEHICLE", "SECTION"])
+        if node_marker < 0 or vehicle_marker < 0:
+            raise ValueError("could not locate NODE/VEHICLE sections")
+
+        def header_int(words: list[str]) -> int:
+            idx = find_marker(words, 0, node_marker)
+            if idx < 0:
+                raise ValueError("missing header field: " + " ".join(words))
+            for k in range(idx + len(words), node_marker):
+                try:
+                    return int(tokens[k])
+                except ValueError:
                     continue
+            raise ValueError("no integer after header field: " + " ".join(words))
 
-                key = normalize_key(line)
-
-                if key == "EOF":
-                    current_section = None
-                    continue
-
-                if key.endswith("_SECTION"):
-                    current_section = key
-                    sections[current_section] = []
-                    continue
-
-                if ":" in line and current_section is None:
-                    k, v = line.split(":", 1)
-                    header[normalize_key(k)] = v.strip()
-                    continue
-
-                if current_section is not None:
-                    sections[current_section].append(line)
-
-        name = header["NAME"]
-        num_nodes = int(header["DIMENSION"])
+        num_nodes = header_int(["DIMENSION"])
         num_customers = num_nodes - 1
-        num_vehicles = int(header["VEHICLES"])
-        num_skills = int(header["NUM_SKILLS"])
+        num_vehicles = header_int(["VEHICLES"])
+        num_skills = header_int(["NUM", "SKILLS"])
+
+        name_match = re.search(r"NAME\s*:\s*(\S+)", raw, flags=re.IGNORECASE)
+        name = name_match.group(1) if name_match else "instance"
 
         x = [0.0] * num_nodes
         y = [0.0] * num_nodes
@@ -98,34 +107,31 @@ class Instance:
         profit = [0] * num_nodes
         required_skills = [set() for _ in range(num_nodes)]
 
-        for line in sections["NODE_SECTION"]:
-            parts = line.split()
-
-            node = int(parts[0])
-            x[node] = float(parts[1])
-            y[node] = float(parts[2])
-            ready[node] = int(parts[3])
-            due[node] = int(parts[4])
-            service[node] = int(parts[5])
-            profit[node] = int(parts[6])
-
-            k = int(parts[7])
-            required_skills[node] = set(map(int, parts[8:8 + k]))
+        c = node_marker + 2
+        for _ in range(num_nodes):
+            node = int(tokens[c]); c += 1
+            x[node] = float(tokens[c]); c += 1
+            y[node] = float(tokens[c]); c += 1
+            ready[node] = int(tokens[c]); c += 1
+            due[node] = int(tokens[c]); c += 1
+            service[node] = int(tokens[c]); c += 1
+            profit[node] = int(tokens[c]); c += 1
+            k = int(tokens[c]); c += 1
+            required_skills[node] = set(int(tokens[c + s]) for s in range(k))
+            c += k
 
         vehicle_start = [0] * num_vehicles
         vehicle_end = [0] * num_vehicles
         vehicle_skills = [set() for _ in range(num_vehicles)]
 
-        for line in sections["VEHICLE_SECTION"]:
-            parts = line.split()
-
-            vehicle = int(parts[0]) - 1
-
-            vehicle_start[vehicle] = int(parts[1])
-            vehicle_end[vehicle] = int(parts[2])
-
-            k = int(parts[3])
-            vehicle_skills[vehicle] = set(map(int, parts[4:4 + k]))
+        c = vehicle_marker + 2
+        for _ in range(num_vehicles):
+            vehicle = int(tokens[c]) - 1; c += 1
+            vehicle_start[vehicle] = int(tokens[c]); c += 1
+            vehicle_end[vehicle] = int(tokens[c]); c += 1
+            k = int(tokens[c]); c += 1
+            vehicle_skills[vehicle] = set(int(tokens[c + s]) for s in range(k))
+            c += k
 
         return cls(
             name=name,

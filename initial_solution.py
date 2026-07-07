@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from solution import Solution
@@ -103,13 +104,25 @@ def get_customer_order(inst, strategy: str) -> list[int]:
     raise ValueError(f"Unknown greedy strategy: {strategy}")
 
 
-def greedy_build_with_order(inst, customer_order: list[int]) -> Solution:
+def greedy_build_with_order(
+    inst,
+    customer_order: list[int],
+    deadline: float | None = None,
+) -> Solution:
     """
-    Builds one greedy solution using a fixed customer order.
+    Builds one greedy solution using a fixed customer order. Stops early (and
+    returns the partial, still feasible solution) when `deadline` is reached.
     """
     solution = Solution.empty(inst)
 
-    for customer in customer_order:
+    for index, customer in enumerate(customer_order):
+        if (
+            deadline is not None
+            and (index & 31) == 0
+            and time.perf_counter() > deadline
+        ):
+            break
+
         insertion = find_best_insertion(
             inst=inst,
             routes=solution.routes,
@@ -126,11 +139,12 @@ def greedy_initial_solution(
     inst,
     strategy: str = "multi_start",
     verbose: bool = False,
+    deadline: float | None = None,
 ) -> Solution:
 
     if strategy != "multi_start":
         order = get_customer_order(inst, strategy)
-        solution = greedy_build_with_order(inst, order)
+        solution = greedy_build_with_order(inst, order, deadline=deadline)
 
         if verbose:
             print(f"Greedy strategy: {strategy}")
@@ -150,8 +164,15 @@ def greedy_initial_solution(
     best_strategy = None
 
     for current_strategy in strategies:
+        if (
+            deadline is not None
+            and best_solution is not None
+            and time.perf_counter() > deadline
+        ):
+            break
+
         order = get_customer_order(inst, current_strategy)
-        solution = greedy_build_with_order(inst, order)
+        solution = greedy_build_with_order(inst, order, deadline=deadline)
 
         if verbose:
             print(f"Greedy strategy: {current_strategy}")

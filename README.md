@@ -1,55 +1,44 @@
-# Übersicht ALNS Framework
-*Stand 30.06.* 
+# Prize-Collecting Skill-VRP — ALNS Metaheuristic
 
-**zu nutzende Dateien sind;**
+Solution for the Metaheuristics project (31-MM34, SoSe 26): an Adaptive Large
+Neighborhood Search for the prize-collecting Skill Vehicle Routing Problem
+with time windows and courier shifts.
+
+## Usage (as required by the project)
+
 ```
-alns.py
-instance_reader.py
-initial_solution.py
-solution.py
-checher.py
-test_run.md
+python3 skillvrp.py <path to instance> <timeout (s)>
 ```
-### Phase 1: Initialisation
-...
-### Phase 2: Main
-#### Destroy Operators
-##### Übersicht über gängige Destroy-operatoren (Mara et al., 2022)
 
-| Name | Beschreibung | Referenz(en) |
-|------|--------------|--------------|
-| Random removal | Dieser Operator entfernt iterativ einen zufällig ausgewählten Knoten aus einer Lösung. | Ropke and Pisinger (2006a; 2006b) |
-| Worst removal | Dieser Operator entfernt iterativ einen Knoten, der erheblich zu den Gesamtkosten einer Lösung beiträgt. | Ropke and Pisinger (2006a; 2006b) |
-| Shaw removal | Dieser Operator entfernt iterativ den Knoten mit dem höchsten Ähnlichkeitsindex aus einer Lösung. Der Ähnlichkeitsindex eines Knotens wird berechnet, indem der Knoten anhand einer Reihe vordefinierter Kriterien mit einem ausgewählten Saatknoten (seed node) verglichen wird. | Shaw (1998), Ropke and Pisinger (2006a; 2006b) |
-| Route removal | Dieser im Vehicle-Routing-Bereich verbreitete Operator entfernt zufällig eine Anzahl von Routen samt aller zugehörigen Knoten aus einer Lösung. | Demir et al. (2012) |
-| History-based removal | Dieser Operator entfernt iterativ den Knoten mit der größten Differenz zwischen seinen aktuellen Positionskosten und seinen historisch besten Positionskosten aus einer Lösung. | Ropke and Pisinger (2006a), Pisinger and Ropke (2007) |
-| Neighborhood removal | Dieser ursprünglich im Vehicle-Routing-Bereich vorgeschlagene Operator entfernt iterativ einen Knoten, der im Hinblick auf die durchschnittliche Distanz der Route, zu der der Knoten gehört, von Bedeutung ist. | Demir et al. (2012) |
-| Proximity-based removal | Dieser Operator ist ein Spezialfall der Shaw-Entfernung, bei dem der Distanzwert zwischen zwei Knoten das einzige als Ähnlichkeitsindex verwendete Kriterium ist. | Demir et al. (2012) |
-| Time-based removal | Dieser Operator ist ein Spezialfall der Shaw-Entfernung, bei dem die Differenz eines Zeitmerkmals zwischen zwei Knoten – z. B. die früheste Startzeit der Bedienung – das einzige als Ähnlichkeitsindex verwendete Kriterium ist. | Demir et al. (2012) |
-| Demand-based removal | Dieser Operator ist ein Spezialfall der Shaw-Entfernung, bei dem die Nachfragedifferenz zwischen zwei Knoten das einzige als Ähnlichkeitsindex verwendete Kriterium ist. | Demir et al. (2012) |
-| Cluster removal | Dieser Operator nutzt einen Clustering-Algorithmus, z. B. Kruskals Algorithmus, um zwei Cluster zu bilden und alle Knoten eines zufällig ausgewählten Clusters aus der Lösung zu entfernen. | Ropke and Pisinger (2006a), Pisinger and Ropke (2007) |
+Example: `python3 skillvrp.py instance.txt 30` — writes the solution to
+stdout in the checker format. Requires Python >= 3.9, no third-party
+packages.
 
-#### Repair Operators
-##### Übersicht über gängige Repair-operatoren (Mara et al., 2022)
+## Files
 
-| Name | Beschreibung | Referenz(en) |
-|------|--------------|--------------|
-| Greedy insertion | Dieser Operator wählt und fügt iterativ den Knoten ein, der unter allen verbleibenden Knoten in der Liste der entfernten Knoten die geringsten Einfügekosten verursacht. In einigen Arbeiten wird dieser Operator auch *Best insertion* oder *Cheapest insertion* genannt. | Ropke and Pisinger (2006a; 2006b), Pisinger and Ropke (2007) |
-| (k-)Regret insertion | Dieser Operator wählt und fügt iterativ den Knoten ein, der unter den verbleibenden Knoten in der Liste der entfernten Knoten den größten Reue-Wert (regret value) aufweist. Der Reue-Wert eines Knotens ergibt sich aus der Differenz zwischen den Kosten der besten Einfügeposition und den Kosten der k-besten Einfügeposition. | Ropke and Pisinger (2006a; 2006b), Pisinger and Ropke (2007) |
-| Random insertion | Dieser Operator wählt zufällig einen Knoten aus der Liste der entfernten Knoten und fügt ihn an der Position mit den geringsten zusätzlichen Kosten ein. | Coelho et al. (2012a; 2012b), Qu and Bard (2012; 2013) |
-| Sequential insertion | Dieser Operator fügt die Knoten aus der Liste der entfernten Knoten nacheinander an der jeweils kostengünstigsten Einfügeposition in die Lösung ein. | Kovacs et al. (2012) |
-| Shaw insertion | Dieser Operator nutzt das bei der Shaw-Entfernung beschriebene Konzept des Ähnlichkeitsindex, um den nächsten in die Lösung einzufügenden Knoten aus der Liste der entfernten Knoten auszuwählen. | Coelho et al. (2012a; 2012b) |
-| Swap insertion | Dieser Operator wählt zufällig zwei Knoten in der Lösung aus und vertauscht sie. | Coelho et al. (2012a) |
-| Zone insertion | Dieser ursprünglich für den Vehicle-Routing-Bereich vorgeschlagene Operator ähnelt der Greedy insertion, verwendet jedoch das Zeitfenster-Kriterium statt der Distanz, um die beste Einfügeposition eines Knotens zu bestimmen. | Demir et al. (2012) |
-| Cluster insertion | Dieser Operator teilt die entfernten Knoten in eine Anzahl von Clustern ein, bevor die Einfügungen durchgeführt werden. | Maknoon and Laporte (2017), Santini (2019) |
+| file                 | purpose                                                        |
+|----------------------|----------------------------------------------------------------|
+| `skillvrp.py`        | entry point: CLI, configuration, greedy start + ALNS, output   |
+| `instance_reader.py` | instance parsing and derived data (distances, feasible-vehicle lists, bounds) |
+| `initial_solution.py`| multi-start greedy insertion construction heuristic            |
+| `alns.py`            | ALNS framework: route caches (forward time slack), destroy/repair operators, adaptive weights, SA acceptance |
+| `solution.py`        | solution representation and checker-format output              |
+| `benchmark.py`       | dev tool: run all instances, validate with checker, report %UB |
+| `report/`            | report source material (approach, experiments)                 |
 
-#### Acceptance Criteria
-Wir nutzen den SA Framework. Es besteht noch die Möglichkeit $T_0$ instance dependent festzulegen.
-#### Adaptive Weights Adjustment
-W`keit die Operatoren zu nutzen (wird periodisch angepasst)
+## Method summary
 
-## ToDo
-- die passenden Operatoren auswählen
-- PenaltyParams und SAParams tunen
-- maybe $T_0$ instance dependent machen
-- acceleration techniques nutzen?, wenn Feasibility Überprüfung nicht effizient ist (ALNS hat ja 30s, um zu performen)
+* **Initial solution**: multi-start greedy insertion (4 customer orderings),
+  best kept.
+* **Destroy** (size ~ U(0.05, 0.28) of served, capped at 70): random,
+  worst-density (static), worst-detour (solution-dependent), Shaw-style
+  related removal, and a problem-specific skill-scarcity removal.
+* **Repair** (feasible insertions only): greedy best-first, regret-2, and
+  single-pass sequential cheapest insertion (profit / random order).
+* **Acceleration**: O(1) insertion feasibility via cached forward time
+  slacks; per-(customer, vehicle) move cache invalidated per modified route;
+  early-exit suffix evaluation as fallback.
+* **Acceptance**: simulated annealing with time-based cooling (T0 scaled to
+  move deltas), return-to-best intensification, randomized restarts.
+* **Adaptivity**: operator weights updated every 100 iterations from scores,
+  normalized by operator runtime.
