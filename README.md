@@ -1,5 +1,5 @@
 # Übersicht ALNS Framework
-*Stand 30.06.* 
+*Stand 08.07.* 
 
 **zu nutzende Dateien sind;**
 ```
@@ -49,7 +49,23 @@ Wir nutzen den SA Framework. Es besteht noch die Möglichkeit $T_0$ instance dep
 W`keit die Operatoren zu nutzen (wird periodisch angepasst)
 
 ## ToDo
-- die passenden Operatoren auswählen
+### steht an
+D: Mergen der alns Dateien - Erledigt.
+Ich habe die Änderungen übernommen, bis auf die Rückkehr zur best solution. Ich glaube das bindet uns sonst sehr stark an ein lokales Optimum und die Hoffnung dort noch Verbesserungen zu erzielen, obwohl sie bislang nicht erfolgreich waren. 
+
+M: Erstellen der Grundstruktur für ein Tex dokument.
+
+R: Einbauen deiner Repair / Destroy Operatoren in die überarbeitete alns.py und Longrun-Behmark laufen lassen. 
+
+- Die Benchmark sollte jede Distanz länger laufen lassen (bspw 10 min)
+- alle gängigen Operatoren (s.o.) noch adden
+- Alle Operatoren gewichte bei 1 starten lassen
+- Die Gewichts-Updates je Operatoren tracken - sodass man eine liste je Operator hat über die Gewichtsverschiebungen. (ggf setzt du dazu min_operator_weight sehr niedrig und segment_length etwas höher)
+- Die best solution tracken. Also immer wenn eine neue best solution gefunden wird den wert und den Zeitpunkt tracken.
+
+Am besten du speicherst die Werte irgendwo als CSV ab, damit wir daraus Plots für unseren Report erstellen können. Du müsstest den alns.py code für die Benchmark anpassen bzw dir eine neue Version bauen, damit der ALNS die daten speichert. 
+
+### Zusatz
 - PenaltyParams und SAParams tunen
 - maybe $T_0$ instance dependent machen
 - acceleration techniques nutzen?, wenn Feasibility Überprüfung nicht effizient ist (ALNS hat ja 30s, um zu performen)
