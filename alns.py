@@ -2571,3 +2571,886 @@ def run_alns(
         destroy_summary=operator_summary(destroy_operators),
         repair_summary=operator_summary(repair_operators),
     )
+
+
+###########################################
+
+# Additional destroy/repair operators from the literature.
+#
+# Purely additive block: nothing above this line was changed. All classes
+# below only use the existing helpers (build_destroy_result, number_to_remove,
+# InsertionScanner, slack_insertion_move_for_position, ...).
+#
+# Sources:
+# * Kovacs, Parragh, Doerner & Hartl (2012), J Sched 15:579-600 --
+#   cluster removal (Sect. 3.1.4), relatedness on current service-begin
+#   times (Eq. 18-19), regret-q repair (Sect. 3.2.3).
+# * Hammami, Rekik & Coelho (2020), Comput. Oper. Res. 123:105034 --
+#   sequence removal and largest-saving removal (Sect. 4.2.2), LRFI order
+#   (Sect. 4.2.1) and random-feasible-position insertion (Sect. 4.2.3).
+
+
+class SequenceRemoval(DestroyOperator):
+    """Hammami et al. 2020 (Sect. 4.2.2, "sequence removal"): removes a
+    contiguous sequence of customers from a randomly chosen route, creating
+    one large contiguous time slot that the repair step can refill with a
+    different (more profitable) sequence.
+
+    TimeWindowSegmentRemoval empties a time slice ACROSS all routes; this is
+    the intra-route counterpart. If the chosen route is shorter than the
+    target size, further shuffled routes are drawn until q is reached.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        initial_weight: float,
+    ):
+        super().__init__("sequence_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "sequence_removal", penalties)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+            rng=rng,
+        )
+
+        vehicles = [v for v in inst.vehicles if solution.routes[v]]
+        rng.shuffle(vehicles)
+
+        removed: list[int] = []
+
+        for vehicle in vehicles:
+            if len(removed) >= q:
+                break
+
+            route = solution.routes[vehicle]
+            take = min(q - len(removed), len(route))
+            start = rng.randrange(len(route) - take + 1)
+            removed.extend(route[start:start + take])
+
+        return build_destroy_result(inst, solution, removed, "sequence_removal", penalties)
+
+
+def mst_two_clusters(inst, nodes: list[int]) -> tuple[list[int], list[int]]:
+    """Splits `nodes` into the two clusters obtained by building a minimum
+    spanning tree over them (Kruskal) and dropping its longest edge
+    (Kovacs et al. 2012, cluster removal). Kruskal adds edges by increasing
+    length, so the last MST edge is the longest one; re-unioning all but that
+    edge leaves exactly the two target components."""
+    n = len(nodes)
+    distance = inst.distance
+
+    edges = sorted(
+        (distance[nodes[i]][nodes[j]], i, j)
+        for i in range(n)
+        for j in range(i + 1, n)
+    )
+
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    mst_edges: list[tuple[int, int]] = []
+
+    for _, i, j in edges:
+        root_i, root_j = find(i), find(j)
+
+        if root_i != root_j:
+            parent[root_i] = root_j
+            mst_edges.append((i, j))
+
+            if len(mst_edges) == n - 1:
+                break
+
+    parent = list(range(n))
+
+    for i, j in mst_edges[:-1]:
+        root_i, root_j = find(i), find(j)
+
+        if root_i != root_j:
+            parent[root_i] = root_j
+
+    first_root = find(0)
+    cluster_a = [nodes[i] for i in range(n) if find(i) == first_root]
+    cluster_b = [nodes[i] for i in range(n) if find(i) != first_root]
+    return cluster_a, cluster_b
+
+
+class ClusterRemoval(DestroyOperator):
+    """Kovacs et al. 2012 (Sect. 3.1.4, after Ropke & Pisinger): picks a
+    route with at least three customers, splits its customers into two
+    spatial clusters via the minimum spanning tree (longest edge removed)
+    and removes one cluster entirely. Then hops to the route of the closest
+    still-scheduled customer and repeats until q customers are removed.
+
+    Unlike RelatedRemoval/ShawRelatedRemoval (which pick similar customers
+    ACROSS routes), this removes spatially coherent blocks PER route --
+    aimed at breaking up geographically wrong courier assignments.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        initial_weight: float,
+    ):
+        super().__init__("cluster_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "cluster_removal", penalties)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+            rng=rng,
+        )
+
+        removed: list[int] = []
+        removed_set: set[int] = set()
+
+        def remaining(vehicle: int) -> list[int]:
+            return [c for c in solution.routes[vehicle] if c not in removed_set]
+
+        eligible = [v for v in inst.vehicles if len(solution.routes[v]) >= 3]
+
+        if not eligible:
+            # No route is long enough to split: degrade to a random sample
+            # (Kovacs stops here; an empty destroy would waste the iteration).
+            removed = rng.sample(served, q)
+            return build_destroy_result(inst, solution, removed, "cluster_removal", penalties)
+
+        vehicle = rng.choice(eligible)
+
+        while len(removed) < q:
+            nodes = remaining(vehicle)
+
+            if len(nodes) < 3:
+                break
+
+            cluster_a, cluster_b = mst_two_clusters(inst, nodes)
+            chosen = cluster_a if rng.random() < 0.5 else cluster_b
+
+            removed.extend(chosen)
+            removed_set.update(chosen)
+
+            if len(removed) >= q:
+                break
+
+            # Hop to the route of the closest still-scheduled customer of a
+            # randomly drawn just-removed one; that route must be a different
+            # one and still splittable. A few seeds are tried before giving up.
+            next_vehicle = None
+
+            for _ in range(8):
+                seed = rng.choice(removed)
+
+                for other in inst.nearest_customers[seed]:
+                    if other in removed_set:
+                        continue
+
+                    other_vehicle = solution.customer_to_vehicle.get(other)
+
+                    if other_vehicle is None:
+                        continue  # not currently scheduled
+
+                    # `other` is the closest still-scheduled customer.
+                    if other_vehicle != vehicle and len(remaining(other_vehicle)) >= 3:
+                        next_vehicle = other_vehicle
+
+                    break
+
+                if next_vehicle is not None:
+                    break
+
+            if next_vehicle is None:
+                break
+
+            vehicle = next_vehicle
+
+        return build_destroy_result(inst, solution, removed, "cluster_removal", penalties)
+
+
+class LargestSavingRemoval(DestroyOperator):
+    """Hammami et al. 2020 (Sect. 4.2.2, "largest saving in traveling
+    time"): removes the customers whose removal frees the most travel time,
+    deliberately ignoring profit.
+
+    The profit-blind counterpart of WorstDetourRemoval(V2): those rank by
+    profit/detour and therefore spare expensive-but-profitable customers,
+    while this operator removes the biggest time consumers outright and
+    lets the repair step decide whether the freed shift time buys more
+    total profit elsewhere. Biased sampling rand()^bias from the largest
+    savings keeps repeated calls from removing identical sets.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        selection_bias: float,
+        initial_weight: float,
+    ):
+        super().__init__("largest_saving_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+        self.selection_bias = selection_bias
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "largest_saving_removal", penalties)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+            rng=rng,
+        )
+
+        distance = inst.distance
+        scored = []
+
+        for route in solution.routes:
+            last = len(route) - 1
+
+            for i, customer in enumerate(route):
+                prev_node = route[i - 1] if i > 0 else 0
+                next_node = route[i + 1] if i < last else 0
+                saving = (
+                    distance[prev_node][customer]
+                    + distance[customer][next_node]
+                    - distance[prev_node][next_node]
+                )
+                scored.append((-saving, customer))
+
+        scored.sort()  # largest saving first
+        pool = [customer for _, customer in scored]
+
+        removed: list[int] = []
+
+        while len(removed) < q and pool:
+            index = int((rng.random() ** self.selection_bias) * len(pool))
+            index = min(index, len(pool) - 1)
+            removed.append(pool.pop(index))
+
+        return build_destroy_result(inst, solution, removed, "largest_saving_removal", penalties)
+
+
+class TemporalShawRemoval(DestroyOperator):
+    """Shaw relatedness computed on the CURRENT solution (Kovacs et al.
+    2012, Eq. 18-19): the time term compares the actual service-begin times
+    of the current tours (cached service_start) instead of the static ready
+    times used by ShawRelatedRemoval. The skill term is the normalized
+    Hamming distance of the required skill sets (equivalent to the Jaccard
+    dissimilarity, matching ShawRelatedRemoval) -- the solution-dependent
+    time term is what distinguishes the two operators.
+
+    Customers that are close, served at a similar time of day and need
+    similar skills are the easiest to exchange between couriers; that
+    similarity depends on the current schedule, which the static variant
+    cannot see.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        p_determinism: float,
+        w_distance: float,
+        w_time: float,
+        w_skill: float,
+        initial_weight: float,
+        neighbor_limit: int = 100,
+    ):
+        super().__init__("temporal_shaw_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+        self.p_determinism = p_determinism
+        self.w_distance = w_distance
+        self.w_time = w_time
+        self.w_skill = w_skill
+        self.neighbor_limit = neighbor_limit
+
+        # Lazily computed normalizers (instance is fixed per run).
+        self._max_distance: float | None = None
+        self._time_horizon: float | None = None
+
+    def _ensure_normalizers(self, inst) -> None:
+        if self._max_distance is None:
+            self._max_distance = max(
+                (max(row) for row in inst.distance),
+                default=1,
+            ) or 1
+            self._time_horizon = max(inst.due) or 1
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "temporal_shaw_removal", penalties)
+
+        self._ensure_normalizers(inst)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+            rng=rng,
+        )
+
+        service_start: dict[int, int] = {}
+
+        for vehicle, route in enumerate(solution.routes):
+            starts = solution.route_cache[vehicle].service_start
+
+            for position, customer in enumerate(route):
+                service_start[customer] = starts[position]
+
+        def relatedness(i: int, j: int) -> float:
+            distance_term = inst.distance[i][j] / self._max_distance
+            time_term = abs(service_start[i] - service_start[j]) / self._time_horizon
+
+            skills_i = inst.required_skills[i]
+            skills_j = inst.required_skills[j]
+            union = skills_i | skills_j
+            skill_term = len(skills_i ^ skills_j) / len(union) if union else 0.0
+
+            return (
+                self.w_distance * distance_term
+                + self.w_time * time_term
+                + self.w_skill * skill_term
+            )
+
+        seed = rng.choice(served)
+        removed = [seed]
+        removed_set = {seed}
+        served_set = set(served)
+
+        while len(removed) < q:
+            reference = rng.choice(removed)
+
+            pool = []
+
+            for other in inst.nearest_customers[reference]:
+                if other in served_set and other not in removed_set:
+                    pool.append(other)
+
+                    if len(pool) >= self.neighbor_limit:
+                        break
+
+            if not pool:
+                break
+
+            pool.sort(key=lambda c: relatedness(reference, c))
+
+            index = int((rng.random() ** self.p_determinism) * len(pool))
+            index = min(index, len(pool) - 1)
+
+            chosen = pool[index]
+            removed.append(chosen)
+            removed_set.add(chosen)
+
+        return build_destroy_result(inst, solution, removed, "temporal_shaw_removal", penalties)
+
+
+def scanner_best_k(scanner: InsertionScanner, customer: int, k: int) -> list[InsertionMove]:
+    """Best insertions on the k best DISTINCT couriers (generalizes
+    InsertionScanner.best_two to arbitrary k)."""
+    per_vehicle = scanner.moves.get(customer)
+
+    if not per_vehicle:
+        return []
+
+    ranked = sorted(per_vehicle.values(), key=insertion_sort_key)
+    return ranked[:k]
+
+
+class RegretKInsertionRepair(RepairOperator):
+    """Regret-q insertion over distinct couriers (Kovacs et al. 2012,
+    Sect. 3.2.3): insert next the customer that loses the most if it cannot
+    take its best option.
+
+    Profits do not depend on the courier, so the regret is measured on the
+    travel-time cost of the best insertion per courier:
+    regret(c) = sum_{i=2..k} (travel_i - travel_1). Customers with fewer
+    than k compatible couriers get a large urgency bonus per missing
+    alternative (the regret-m rationale) -- for the skill variant this
+    naturally places skill-scarce customers first.
+    """
+
+    requires = {"customer_pool"}
+
+    def __init__(
+        self,
+        extra_unserved_limit: int,
+        max_insertions: int | None,
+        min_delta_score: float,
+        k: int,
+        initial_weight: float,
+    ):
+        super().__init__(f"regret{k}_courier_insertion", initial_weight)
+        self.extra_unserved_limit = extra_unserved_limit
+        self.max_insertions = max_insertions
+        self.min_delta_score = min_delta_score
+        self.k = k
+
+    def apply(
+        self,
+        inst,
+        destroy_result: DestroyResult,
+        rng: random.Random,
+        penalties: PenaltyParams,
+        deadline: float | None = None,
+    ) -> Solution:
+        solution = destroy_result.partial_solution
+
+        candidates = build_repair_candidates(
+            inst=inst,
+            solution=solution,
+            removed_customers=destroy_result.removed_customers,
+            extra_unserved_limit=self.extra_unserved_limit,
+            rng=rng,
+        )
+
+        scanner = InsertionScanner(inst, solution, penalties, candidates, deadline)
+        inserted = 0
+
+        while self.max_insertions is None or inserted < self.max_insertions:
+            if deadline is not None and time.perf_counter() > deadline:
+                break
+
+            selected_move = None
+            selected_key = None
+
+            for customer in scanner.customers():
+                moves = scanner_best_k(scanner, customer, self.k)
+
+                if not moves:
+                    continue
+
+                best = moves[0]
+
+                if best.delta_score <= self.min_delta_score:
+                    continue
+
+                regret = 1_000_000.0 * (self.k - len(moves))
+
+                for move in moves[1:]:
+                    regret += move.travel_delta - best.travel_delta
+
+                key = (regret, best.delta_score, -best.travel_delta)
+
+                if selected_key is None or key > selected_key:
+                    selected_move = best
+                    selected_key = key
+
+            if selected_move is None:
+                break
+
+            apply_insertion(solution, inst, penalties, selected_move)
+            scanner.notify_insertion(selected_move)
+            inserted += 1
+
+        return solution
+
+
+class LastRemovedFirstInsertedRepair(RepairOperator):
+    """Hammami et al. 2020 (Sect. 4.2.1, "last removed, first inserted"):
+    reinserts the removed customers in reverse removal order, each at its
+    best feasible position, then offers the extra unserved candidates (in
+    build_repair_candidates order). Cheap ordering strategy the portfolio
+    does not have yet: it gives the customers removed last a chance to grab
+    better positions than the ones they just lost.
+    """
+
+    requires = {"customer_pool"}
+
+    def __init__(
+        self,
+        extra_unserved_limit: int,
+        min_delta_score: float,
+        initial_weight: float,
+    ):
+        super().__init__("lrfi_insertion", initial_weight)
+        self.extra_unserved_limit = extra_unserved_limit
+        self.min_delta_score = min_delta_score
+
+    def apply(
+        self,
+        inst,
+        destroy_result: DestroyResult,
+        rng: random.Random,
+        penalties: PenaltyParams,
+        deadline: float | None = None,
+    ) -> Solution:
+        solution = destroy_result.partial_solution
+
+        candidates = build_repair_candidates(
+            inst=inst,
+            solution=solution,
+            removed_customers=destroy_result.removed_customers,
+            extra_unserved_limit=self.extra_unserved_limit,
+            rng=rng,
+        )
+
+        removed_set = set(destroy_result.removed_customers)
+        lrfi = [
+            c for c in reversed(destroy_result.removed_customers)
+            if c in solution.unserved
+        ]
+        extras = [c for c in candidates if c not in removed_set]
+        order = lrfi + extras
+
+        scanner = InsertionScanner(inst, solution, penalties, order, deadline)
+
+        for index, customer in enumerate(order):
+            if (
+                deadline is not None
+                and (index & 15) == 0
+                and time.perf_counter() > deadline
+            ):
+                break
+
+            move = scanner.best(customer)
+
+            if move is None:
+                continue
+
+            if move.delta_score <= self.min_delta_score:
+                continue
+
+            apply_insertion(solution, inst, penalties, move)
+            scanner.notify_insertion(move)
+
+        return solution
+
+
+class RandomPositionInsertionRepair(RepairOperator):
+    """Hammami et al. 2020 (Sect. 4.2.3, "random available position
+    insertion"): visits the candidates in random order and inserts each at
+    a uniformly random feasible position instead of the best one.
+
+    Pure diversification repair: every other repair in the portfolio lands
+    near a local optimum of the insertion order; this one deliberately does
+    not. Only slack-checked feasible positions are generated, so the result
+    stays penalty-free like the other slack-based repairs.
+    """
+
+    requires = {"customer_pool"}
+
+    def __init__(
+        self,
+        extra_unserved_limit: int,
+        initial_weight: float,
+    ):
+        super().__init__("random_position_insertion", initial_weight)
+        self.extra_unserved_limit = extra_unserved_limit
+
+    def apply(
+        self,
+        inst,
+        destroy_result: DestroyResult,
+        rng: random.Random,
+        penalties: PenaltyParams,
+        deadline: float | None = None,
+    ) -> Solution:
+        solution = destroy_result.partial_solution
+
+        candidates = build_repair_candidates(
+            inst=inst,
+            solution=solution,
+            removed_customers=destroy_result.removed_customers,
+            extra_unserved_limit=self.extra_unserved_limit,
+            rng=rng,
+        )
+
+        rng.shuffle(candidates)
+
+        for index, customer in enumerate(candidates):
+            if (
+                deadline is not None
+                and (index & 7) == 0
+                and time.perf_counter() > deadline
+            ):
+                break
+
+            feasible_moves = []
+
+            for vehicle in inst.solo_feasible_vehicles[customer]:
+                if solution.route_cache[vehicle].penalty != 0.0:
+                    continue  # forward slack only exists for feasible routes
+
+                for position in range(len(solution.routes[vehicle]) + 1):
+                    move = slack_insertion_move_for_position(
+                        inst=inst,
+                        solution=solution,
+                        penalties=penalties,
+                        customer=customer,
+                        vehicle=vehicle,
+                        position=position,
+                    )
+
+                    if move is not None:
+                        feasible_moves.append(move)
+
+            if feasible_moves:
+                apply_insertion(solution, inst, penalties, rng.choice(feasible_moves))
+
+        return solution
+
+
+class HistoryBasedRemoval(DestroyOperator):
+    """History-based removal (Ropke & Pisinger 2006; Pisinger & Ropke 2007;
+    survey: Mara et al. 2022): remembers, per customer, the smallest travel
+    detour ever observed for its route position and removes the customers
+    currently sitting furthest above their historical best. This taps the
+    search history -- an information channel none of the geometry/time/skill
+    based operators can see: a customer whose current position is much worse
+    than one the search has already found is a promising relocation target.
+
+    Purely additive caveat: operators have no per-iteration hook, so the
+    history is only refreshed whenever THIS operator is applied -- an
+    approximation of the every-iteration bookkeeping in the original paper.
+    Like all stateful operators, a fresh instance per run resets the history.
+    """
+
+    def __init__(
+        self,
+        fraction: float,
+        min_remove: int,
+        max_remove: int,
+        selection_bias: float,
+        initial_weight: float,
+    ):
+        super().__init__("history_based_removal", initial_weight)
+        self.fraction = fraction
+        self.min_remove = min_remove
+        self.max_remove = max_remove
+        self.selection_bias = selection_bias
+
+        # customer -> smallest detour seen in any of this operator's calls
+        self.best_detour: dict[int, int] = {}
+
+    def apply(
+        self,
+        inst,
+        solution: Solution,
+        rng: random.Random,
+        penalties: PenaltyParams,
+    ) -> DestroyResult:
+        served = served_customers(solution)
+
+        if not served:
+            return build_destroy_result(inst, solution, [], "history_based_removal", penalties)
+
+        q = number_to_remove(
+            n_served=len(served),
+            fraction=self.fraction,
+            min_remove=self.min_remove,
+            max_remove=self.max_remove,
+            rng=rng,
+        )
+
+        distance = inst.distance
+        best_detour = self.best_detour
+        scored = []
+
+        for route in solution.routes:
+            last = len(route) - 1
+
+            for i, customer in enumerate(route):
+                prev_node = route[i - 1] if i > 0 else 0
+                next_node = route[i + 1] if i < last else 0
+                detour = (
+                    distance[prev_node][customer]
+                    + distance[customer][next_node]
+                    - distance[prev_node][next_node]
+                )
+
+                known = best_detour.get(customer)
+
+                if known is None or detour < known:
+                    best_detour[customer] = detour
+                    known = detour
+
+                # Gap to the historical best position; 0 on first sighting.
+                scored.append((known - detour, customer))
+
+        scored.sort()  # largest gap first (gap stored negated)
+        pool = [customer for _, customer in scored]
+
+        removed: list[int] = []
+
+        while len(removed) < q and pool:
+            index = int((rng.random() ** self.selection_bias) * len(pool))
+            index = min(index, len(pool) - 1)
+            removed.append(pool.pop(index))
+
+        return build_destroy_result(inst, solution, removed, "history_based_removal", penalties)
+
+
+class ShawInsertionRepair(RepairOperator):
+    """Shaw insertion (Coelho et al. 2012; survey: Mara et al. 2022): the
+    next customer to insert is the one most similar to the LAST inserted
+    customer, each placed at its best feasible position. Uses the same
+    static relatedness terms as ShawRelatedRemoval (distance, ready-time
+    difference, skill Jaccard dissimilarity), so related customers re-enter
+    the solution as a group instead of scattered singletons -- the natural
+    counterpart to the Shaw-style removals. p_determinism > 1 biases toward
+    the most related candidate; the first customer is drawn at random.
+    """
+
+    requires = {"customer_pool"}
+
+    def __init__(
+        self,
+        extra_unserved_limit: int,
+        min_delta_score: float,
+        p_determinism: float,
+        w_distance: float,
+        w_time: float,
+        w_skill: float,
+        initial_weight: float,
+    ):
+        super().__init__("shaw_insertion", initial_weight)
+        self.extra_unserved_limit = extra_unserved_limit
+        self.min_delta_score = min_delta_score
+        self.p_determinism = p_determinism
+        self.w_distance = w_distance
+        self.w_time = w_time
+        self.w_skill = w_skill
+
+        # Lazily computed normalizers (instance is fixed per run).
+        self._max_distance: float | None = None
+        self._time_horizon: float | None = None
+
+    def _ensure_normalizers(self, inst) -> None:
+        if self._max_distance is None:
+            self._max_distance = max(
+                (max(row) for row in inst.distance),
+                default=1,
+            ) or 1
+            self._time_horizon = max(inst.due) or 1
+
+    def _relatedness(self, inst, i: int, j: int) -> float:
+        distance_term = inst.distance[i][j] / self._max_distance
+        time_term = abs(inst.ready[i] - inst.ready[j]) / self._time_horizon
+
+        skills_i = inst.required_skills[i]
+        skills_j = inst.required_skills[j]
+        union = skills_i | skills_j
+        jaccard = (len(skills_i & skills_j) / len(union)) if union else 1.0
+        skill_term = 1.0 - jaccard
+
+        return (
+            self.w_distance * distance_term
+            + self.w_time * time_term
+            + self.w_skill * skill_term
+        )
+
+    def apply(
+        self,
+        inst,
+        destroy_result: DestroyResult,
+        rng: random.Random,
+        penalties: PenaltyParams,
+        deadline: float | None = None,
+    ) -> Solution:
+        solution = destroy_result.partial_solution
+        self._ensure_normalizers(inst)
+
+        candidates = build_repair_candidates(
+            inst=inst,
+            solution=solution,
+            removed_customers=destroy_result.removed_customers,
+            extra_unserved_limit=self.extra_unserved_limit,
+            rng=rng,
+        )
+
+        scanner = InsertionScanner(inst, solution, penalties, candidates, deadline)
+
+        pending = scanner.customers()
+        reference: int | None = None
+
+        while pending:
+            if deadline is not None and time.perf_counter() > deadline:
+                break
+
+            if reference is None:
+                index = rng.randrange(len(pending))
+            else:
+                pending.sort(key=lambda c: self._relatedness(inst, reference, c))
+                index = int((rng.random() ** self.p_determinism) * len(pending))
+                index = min(index, len(pending) - 1)
+
+            customer = pending.pop(index)
+
+            move = scanner.best(customer)
+
+            # Infeasible/unprofitable candidates are skipped; the reference
+            # stays the last actually inserted customer.
+            if move is None or move.delta_score <= self.min_delta_score:
+                continue
+
+            apply_insertion(solution, inst, penalties, move)
+            scanner.notify_insertion(move)
+            reference = customer
+
+        return solution
