@@ -55,15 +55,15 @@ Ich habe die Änderungen übernommen, bis auf die Rückkehr zur best solution. I
 
 M: Erstellen der Grundstruktur für ein Tex dokument.
 
-R: Einbauen deiner Repair / Destroy Operatoren in die überarbeitete alns.py und Longrun-Behmark laufen lassen. 
-
-- Die Benchmark sollte jede Distanz länger laufen lassen (bspw 10 min)
-- alle gängigen Operatoren (s.o.) noch adden
-- Alle Operatoren gewichte bei 1 starten lassen
-- Die Gewichts-Updates je Operatoren tracken - sodass man eine liste je Operator hat über die Gewichtsverschiebungen. (ggf setzt du dazu min_operator_weight sehr niedrig und segment_length etwas höher)
-- Die best solution tracken. Also immer wenn eine neue best solution gefunden wird den wert und den Zeitpunkt tracken.
-
-Am besten du speicherst die Werte irgendwo als CSV ab, damit wir daraus Plots für unseren Report erstellen können. Du müsstest den alns.py code für die Benchmark anpassen bzw dir eine neue Version bauen, damit der ALNS die daten speichert. 
+R: 
+- Einbauen deiner Repair / Destroy Operatoren in die überarbeitete alns.py und Longrun-Behmark laufen lassen. ~done
+- Die Benchmark sollte jede Distanz länger laufen lassen (bspw 10 min) ~done
+- alle gängigen Operatoren (s.o.) noch adden ~done
+- Alle Operatoren gewichte bei 1 starten lassen ~done
+- Die Gewichts-Updates je Operatoren tracken - sodass man eine liste je Operator hat über die Gewichtsverschiebungen. (ggf setzt du dazu min_operator_weight sehr niedrig und segment_length etwas höher) ~done
+- Die best solution tracken. Also immer wenn eine neue best solution gefunden wird den wert und den Zeitpunkt tracken. ~done
+- Am besten du speicherst die Werte irgendwo als CSV ab, damit wir daraus Plots für unseren Report erstellen können.
+  Du müsstest den alns.py code für die Benchmark anpassen bzw dir eine neue Version bauen, damit der ALNS die daten speichert. ~done
 
 ### Zusatz
 - PenaltyParams und SAParams tunen
