@@ -73,6 +73,7 @@ R:
 
 U:
 - Longrun laufen lassen
+- performence vergleich auf 3 ebenen: short:10s, base:30s, long 10min 
 
 
 ### Zusatz
