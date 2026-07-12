@@ -1,5 +1,5 @@
 # Übersicht ALNS Framework
-*Stand 08.07.* 
+*Stand 12.07.* 
 
 **zu nutzende Dateien sind;**
 ```
@@ -51,9 +51,12 @@ W`keit die Operatoren zu nutzen (wird periodisch angepasst)
 ## ToDo
 ### steht an
 D: Mergen der alns Dateien - Erledigt.
-Ich habe die Änderungen übernommen, bis auf die Rückkehr zur best solution. Ich glaube das bindet uns sonst sehr stark an ein lokales Optimum und die Hoffnung dort noch Verbesserungen zu erzielen, obwohl sie bislang nicht erfolgreich waren. 
+- Ich habe die Änderungen übernommen, bis auf die Rückkehr zur best solution. Ich glaube das bindet uns sonst sehr stark an ein lokales Optimum und die Hoffnung dort noch Verbesserungen zu erzielen, obwohl sie bislang nicht erfolgreich waren.
+- unsinnige Designentscheidungen im Code {alns, alns_tracking} finden
+- Ablationsstudie laufen lassen
 
-M: Erstellen der Grundstruktur für ein Tex dokument.
+M: 
+- Erstellen der Grundstruktur für ein Tex dokument.
 
 R: 
 - Einbauen deiner Repair / Destroy Operatoren in die überarbeitete alns.py und Longrun-Behmark laufen lassen. ~done
@@ -64,8 +67,15 @@ R:
 - Die best solution tracken. Also immer wenn eine neue best solution gefunden wird den wert und den Zeitpunkt tracken. ~done
 - Am besten du speicherst die Werte irgendwo als CSV ab, damit wir daraus Plots für unseren Report erstellen können.
   Du müsstest den alns.py code für die Benchmark anpassen bzw dir eine neue Version bauen, damit der ALNS die daten speichert. ~done
+  
+- gridsearch laufen lassen 
+- number_to_removal fixen
+
+U:
+- Longrun laufen lassen
+
 
 ### Zusatz
 - PenaltyParams und SAParams tunen
-- maybe $T_0$ instance dependent machen
-- acceleration techniques nutzen?, wenn Feasibility Überprüfung nicht effizient ist (ALNS hat ja 30s, um zu performen)
+- maybe $T_0$ instance dependent machen 
+- acceleration techniques nutzen?, wenn Feasibility Überprüfung nicht effizient ist (ALNS hat ja 30s, um zu performen) ~done
