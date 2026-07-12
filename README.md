@@ -68,8 +68,8 @@ R:
 - Am besten du speicherst die Werte irgendwo als CSV ab, damit wir daraus Plots für unseren Report erstellen können.
   Du müsstest den alns.py code für die Benchmark anpassen bzw dir eine neue Version bauen, damit der ALNS die daten speichert. ~done
   
-- gridsearch laufen lassen 
-- number_to_removal fixen
+- gridsearch laufen lassen ~done (results in gridsearch_top3_setups.json)
+- number_to_removal fixen  ~noch nicht (würde make_operators ins finale script einbauen)
 
 U:
 - Longrun laufen lassen
