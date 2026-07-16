@@ -56,7 +56,11 @@ D: Mergen der alns Dateien - Erledigt.
 - Ablationsstudie laufen lassen
 
 M: 
-- Erstellen der Grundstruktur für ein Tex dokument.
+- Erstellen der Grundstruktur für ein Tex dokument. ~done
+  
+  - **Report_Structure_V0.tex Grundsätzliche grobe Struktur für die Dokumentation, Stichpunkte für jeweilige Unterüberschiften im             .tex Dokument.**
+
+  - **Example_V0.tex Beispielhafte Darstellung einer finalen Dokumentation inkl. Pseudocode & Tabellen.**
 
 R: 
 - Einbauen deiner Repair / Destroy Operatoren in die überarbeitete alns.py und Longrun-Behmark laufen lassen. ~done
