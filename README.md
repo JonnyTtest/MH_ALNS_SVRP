@@ -1,5 +1,5 @@
 # Übersicht ALNS Framework
-*Stand 12.07.* 
+*Stand 16.07.* 
 
 **zu nutzende Dateien sind;**
 ```
