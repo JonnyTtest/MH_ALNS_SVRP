@@ -1,0 +1,602 @@
+% =========================================================================
+% Metaheuristics Project (31-MM34, SoSe 26) -- Example_V0
+% Compile: pdflatex Example_V0.tex
+% =========================================================================
+\documentclass[10pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\ub}{\%\,UB}
+
+\title{An Adaptive Large Neighborhood Search for the\\
+       Prize-Collecting Skill Vehicle Routing Problem}
+\author{Umais Chaudhary, Rehman Kerimov, Dustin Schulz, Marco Leander vom Orde \\ \small 31-MM34 Metaheuristics, SoSe 26, Bielefeld University}
+\date{Juli 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a metaheuristic for the prize-collecting Skill Vehicle Routing
+Problem, in which a small team of couriers with heterogeneous skill sets
+serves an optional subset of customers under time windows and shift limits so
+as to maximize collected profit. Guided by the literature on team orienteering
+and technician routing, we adopt an Adaptive Large Neighborhood Search (ALNS)
+with simulated-annealing acceptance. Our central observation is that, under
+the project's 30-second CPython budget, \emph{move-evaluation throughput} ---
+not operator sophistication --- is the binding constraint: constant-time
+insertion feasibility via forward time slacks and a per-route move cache
+raise the iteration count on the largest instance by a factor of 250 and turn
+an otherwise idle framework into a competitive solver. On the 20 benchmark
+instances (50--1000 customers) the final configuration attains 63.0\,\% of a
+singleton-feasibility upper bound as a mean over three seeds, with all 60
+runs feasible and within the time limit, matching the best single run of a
+heavily tuned single-trajectory LNS baseline.
+\end{abstract}
+
+% =========================================================================
+\section{Introduction}
+
+A pharmacy plans daily home-delivery tours for a small team of couriers.
+Deliveries differ in handling requirements (refrigeration, controlled
+substances, device setup), and each courier is certified for only a subset of
+these \emph{skills}. Because the team is small, not every request can be
+served: each served request yields a profit, and the objective is to select
+and route a subset of customers maximizing total profit while respecting
+skill compatibility, customer time windows and courier shifts.
+
+Three properties shape the algorithmic landscape. First, the problem is
+\emph{selective}: customer choice and routing must be optimized jointly, which
+weakens methods that rely on all customers being present. Second, skills act
+as hard compatibility filters between customers and couriers, so courier
+capacity is a heterogeneous, contested resource. Third, the project imposes a
+hard wall-clock budget (e.g., 30\,s) on pure-Python code, so the effective
+search effort is limited by how cheaply a candidate move can be evaluated.
+
+Our design follows a single guiding principle that also structures this
+report: \emph{evidence first, efficiency second, operator richness third}.
+The literature on the two closest problem families --- the team orienteering
+problem with time windows (TOPTW) and technician routing --- consistently
+favors destroy-and-repair searches over population methods
+(Section~\ref{sec:related}); we therefore adopt ALNS
+\cite{ropke2006,pisinger2007}. A first, faithful implementation of that
+framework, however, completed only \emph{four} iterations within 30\,s on the
+largest instance --- less than the construction heuristic alone achieves.
+Section~\ref{sec:method} describes how constant-time feasibility checking
+\cite{savelsbergh1992}, a per-route move cache and a wall-clock-based
+annealing schedule convert the same framework into one that performs roughly
+1{,}000 iterations on 1000 customers and 50{,}000 on 50 customers.
+Sections~\ref{sec:components} and~\ref{sec:overall} experimentally justify
+each component and evaluate the final solver.
+
+Our contributions are: (i) an ALNS for the prize-collecting Skill VRP with a
+skill-aware operator portfolio, including a problem-specific
+\emph{skill-scarcity} destroy operator; (ii) an evaluation architecture that
+makes the framework viable in interpreted Python (forward time slacks, move
+caching, early-exit delta evaluation), validated by differential testing;
+(iii) a systematic component study showing, among other things, that destroy
+\emph{size} is best treated as part of the operator identity learned by the
+adaptive weights; and (iv) a noise-robust final evaluation (three seeds per
+instance) reaching 63.0\,\ub{} on average with zero infeasible or late runs.
+
+% =========================================================================
+\section{Problem Statement}\label{sec:problem}
+
+Let $C=\{1,\dots,n\}$ be the customers and $B$ the couriers; node $0$ is the
+pharmacy. Each customer $c$ has profit $p_c$, service time $s_c$, time window
+$[e_c,\ell_c]$ and required skills $R_c\subseteq\{1,\dots,S\}$. Each courier
+$b$ has a shift $[\mathit{start}_b,\mathit{end}_b]$ and skills
+$Q_b\subseteq\{1,\dots,S\}$. Travel times $d_{ij}$ are Euclidean distances
+rounded to the nearest integer, identical for all couriers. A plan assigns to
+every courier a tour starting and ending at the pharmacy within its shift; a
+courier may serve $c$ only if $R_c\subseteq Q_b$; arrival at $c$ must not
+exceed $\ell_c$ (early arrivals wait until $e_c$); each customer is visited at
+most once. With $x_c\in\{0,1\}$ indicating service, the objective is
+\begin{equation}
+  \max \sum_{c\in C} p_c\, x_c .
+  \label{eq:objective}
+\end{equation}
+The problem contains the team orienteering problem and hence the TSP as
+special cases and is NP-hard. Since optima are unknown, we report solution
+quality relative to the \emph{singleton upper bound}
+$\mathrm{UB}=\sum_{c\,:\,\exists b:\, c \text{ servable solo by } b} p_c$,
+the profit of all customers that at least one courier could serve as a
+one-customer tour. UB ignores all interaction between customers and is
+therefore loose; it is nevertheless instance-independent of the solver and
+suitable for relative comparisons.
+
+% =========================================================================
+\section{Related Work}\label{sec:related}
+
+\subsection{Problem classification}
+The selective aspect --- optional customers, profit maximization under
+routing-time restrictions --- places the problem in the orienteering family
+\cite{vansteenwegen2011}; with multiple vehicles and hard time windows its
+routing core is the TOPTW \cite{labadie2012,gunawan2016}. The skill aspect
+corresponds to the Skill VRP of Cappanera et al.~\cite{cappanera2011} and the
+technician routing and scheduling problem (TRSP)
+\cite{kovacs2012,pillac2013}, which combines skills, time windows and worker
+shifts exactly as here.
+
+\subsection{Metaheuristics for selective routing with time windows}
+The TOPTW literature is dominated by trajectory-based search: the fast
+iterated local search of Vansteenwegen et al.~\cite{vansteenwegen2009}
+remains the low-runtime reference; granular VNS \cite{labadie2012}, the
+three-component I3CH \cite{hu2014} and a well-tuned ILS/SA hybrid
+\cite{gunawan2017} define the quality frontier. A shared efficiency idea is
+constant-time insertion feasibility via forward time slacks
+\cite{savelsbergh1992,vansteenwegen2009}, which we adopt.
+
+\subsection{LNS, ALNS and population methods}
+Large neighborhood search \cite{shaw1998} and its adaptive variant
+\cite{ropke2006,pisinger2007} repeatedly destroy part of a solution (random,
+related, worst removal) and repair it by greedy or regret insertion; SISR
+\cite{christiaens2020} shows that carefully designed removals keep this
+family state of the art. For the TRSP --- the closest published relative of
+our problem --- Kovacs et al.~\cite{kovacs2012} report ALNS clearly
+outperforming exact approaches beyond small instances; the home-health-care
+survey of Ciss\'e et al.~\cite{cisse2017} reaches the same conclusion for
+compatibility-constrained routing with optional visits. Hybrid genetic search
+\cite{vidal2012,vidal2022} defines the state of the art for classical VRPs,
+but its strengths (giant-tour decoding, dense route-improvement
+neighborhoods) degrade when customer \emph{selection} is part of the problem
+and hard time windows, shifts and skill filters render most offspring
+infeasible.
+
+\subsection{Synthesis}
+Both closest problem families point to the same design: destroy-and-repair
+search with insertion-based repair, feasibility filtering for skills, and an
+annealing-type acceptance --- i.e., ALNS. Under a short, interpreted-Python
+time budget the cheap-move efficiency of ALNS weighs even more heavily
+against population methods. This is the method we implement; the remainder of
+the paper shows that realizing its potential in Python is chiefly an
+\emph{evaluation-efficiency} problem.
+
+% =========================================================================
+\section{Solution Approach}\label{sec:method}
+
+\subsection{Framework overview}
+Algorithm~1 shows the search. After preprocessing and a greedy
+multi-start construction, the ALNS iterates destroy--repair cycles; operators
+are drawn with probability proportional to adaptive weights; candidates are
+accepted by simulated annealing whose temperature decays with \emph{elapsed
+wall-clock time}; new global bests trigger an Or-opt polish that compresses
+routes and refills freed capacity. The best feasible solution is printed; an
+empty plan is the always-feasible fallback.
+
+\begin{figure}[t]
+\hrule\vspace{3pt}
+\noindent\textbf{Algorithm 1:} ALNS for the prize-collecting Skill VRP
+\vspace{3pt}\hrule\vspace{4pt}
+\small
+\begin{tabbing}
+\hspace{1.5em}\=\hspace{1.5em}\=\hspace{1.5em}\=\kill
+1:\> $x \gets$ best of four greedy insertion orderings;\quad $x^{*} \gets x$\\
+2:\> \textbf{while} $\mathrm{now} < \mathrm{deadline}$ \textbf{do}\\
+3:\>\> draw destroy $d$ and repair $r$ proportional to weights;\quad
+        $x' \gets r(d(x))$ \hfill$\triangleright$ feasible insertions only\\
+4:\>\> $T \gets T_0\,(T_{\min}/T_0)^{(\mathrm{now}-t_0)/(\mathrm{deadline}-t_0)}$
+        \hfill$\triangleright$ time-based cooling\\
+5:\>\> \textbf{if} $f(x') \ge f(x)$ \textbf{or}
+        $\mathrm{rand} < e^{(f(x')-f(x))/T}$ \textbf{then} $x \gets x'$\\
+6:\>\> \textbf{if} $f(x') > f(x^{*})$ \textbf{then}
+        $x^{*} \gets \textsc{PolishAndFill}(x')$;\quad $x \gets x^{*}$
+        \hfill$\triangleright$ Or-opt + refill, rate-limited\\
+7:\>\> update operator scores;\quad every 100 iterations update weights\\
+8:\>\> return to $x^{*}$ after 2000 non-improving iterations;\quad
+        restart and reheat after 500 rejections\\
+9:\> \textbf{return} $x^{*}$
+\end{tabbing}
+\vspace{-6pt}\hrule
+\end{figure}
+
+\subsection{Preprocessing and construction heuristic}
+Preprocessing computes the rounded distance matrix, for every customer the
+list of couriers that can serve it \emph{solo} (skill subset test plus a
+singleton-tour time check) --- customers with an empty list are discarded once
+and for all --- and a profit-density lower bound $p_c/\tau_c$, where $\tau_c$
+estimates the minimal time to serve $c$. Construction inserts customers one
+at a time at the feasible position of minimal travel detour over all
+compatible couriers. Four orderings (profit; profit density; fewest feasible
+couriers first; a lexicographic hybrid) are all evaluated and the most
+profitable start is kept; on the largest instance this multi-start costs
+under 5\,s and the gap between orderings reaches 20\,\% (Table~\ref{tab:final}
+shows the selected starts).
+
+\subsection{Destroy operators}
+All destroy sizes $q$ are drawn per call from a fraction range of currently
+served customers. The portfolio combines general-purpose and
+problem-specific operators:
+\emph{random removal} (diversification);
+\emph{related removal} \cite{shaw1998}: a random seed customer and its
+nearest served neighbors, removing a coherent region a repair can re-route;
+\emph{worst-detour removal} \cite{ropke2006}: customers with the lowest
+profit per travel detour in their current position, biased sampling;
+\emph{worst-density removal}: the static analogue based on $p_c/\tau_c$;
+and \emph{skill-scarcity removal}, which targets low-profit customers
+occupying couriers whose skill set is in high demand among the currently
+unserved customers --- freeing contested skill capacity that geometric
+operators cannot ``see''.
+Because no single destroy size suits all instances
+(Section~\ref{sec:exp-size}), the three geometric operators exist in a
+\emph{small} ($U(0.03,0.12)$, cap 40) and a \emph{large} ($U(0.12,0.28)$, cap
+70) variant, making the size part of the operator identity that the adaptive
+weights learn per instance.
+
+\subsection{Repair operators}
+Repair candidates are the removed customers plus 100 unserved extras --- half
+the top profit-density customers, half sampled uniformly, since a purely
+static candidate list would starve the remaining pool. All repairs generate
+\emph{feasible} insertions only.
+\emph{Greedy best-first insertion} repeatedly applies the globally best
+insertion (highest profit, ties by minimal detour);
+\emph{regret-2 insertion} \cite{ropke2006} prioritizes customers whose
+second-best slot is much worse than their best;
+\emph{sequential cheapest insertion} \cite{kovacs2012} performs a single pass
+over the candidates (profit or random order), inserting each immediately at
+its cheapest feasible position --- roughly three times cheaper per call, it
+trades per-repair care for iteration throughput;
+a \emph{noised} sequential variant perturbs the position ranking by
+$\pm 0.1\,d_{\max}$ \cite{ropke2006} to escape deterministic ruts.
+
+\subsection{Efficient move evaluation}\label{sec:eval}
+This subsection is the technical core. Three mechanisms reduce the cost of
+the dominant operation --- ``what is the best feasible insertion of customer
+$c$ into route $r$?'' --- by orders of magnitude.
+
+\textbf{(i) Forward time slacks.} Every route caches arrival, service-start
+and departure times plus the forward time slack \cite{savelsbergh1992}:
+$\mathit{slack}_i$ is the maximal delay of the service start at position $i$
+that keeps positions $i,\dots,m$ and the depot return feasible, computed
+backwards in $O(m)$ when the route changes. An insertion at position $i$ is
+then feasible iff the arrival at the new customer meets its due time and the
+induced delay of the successor does not exceed $\mathit{slack}_i$ --- an
+$O(1)$ test replacing an $O(m)$ re-simulation. Two monotonicity pruning rules
+skip positions that cannot host the customer at all.
+
+\textbf{(ii) Move caching.} Inserting a customer modifies exactly one route,
+so cached best moves of all candidates on \emph{other} routes remain exact.
+The repair operators therefore build a per-(customer, vehicle) cache of top
+moves once and, after each insertion, recompute only the entries of the
+modified vehicle \cite{ropke2006}. Previously each single insertion
+re-evaluated every candidate on every vehicle.
+
+\textbf{(iii) Early-exit delta evaluation.} For the rare evaluation of
+infeasible routes (the penalty branch of the SA), the route suffix is
+re-simulated only until its timeline re-synchronizes with the cached one;
+the cached suffix penalty then applies verbatim.
+
+Correctness of both evaluation paths was established by differential testing
+against brute-force route re-simulation ($\approx$16{,}000 random cases, zero
+deviations). Section~\ref{sec:exp-throughput} quantifies the effect: a factor
+of $\approx$250 in iteration throughput on the largest instance.
+
+\subsection{Acceptance, adaptivity and intensification}
+Two calibration insights matter more than exact parameter values. First,
+the initial temperature must be scaled to the magnitude of a \emph{move}:
+destroy--repair deltas are sums of a few customer profits (10--100)
+regardless of instance size, whereas total profit grows twentyfold from
+$n{=}50$ to $n{=}1000$; scaling $T_0$ to the solution value (as often done)
+turns the search into a random walk on large instances. We use
+$T_0 = 1.5\times$ mean customer profit. Second, cooling must be
+\emph{time-based}: iteration throughput spans two orders of magnitude across
+the benchmark, so a fixed geometric rate per iteration is either frozen on
+small or never cools on large instances; we decay $T$ exponentially in the
+elapsed fraction of the budget (Algorithm~1, line~4).
+Operator weights are updated every 100 iterations from scores (new global
+best 25, improving 10, accepted 3, rejected 0), smoothed with reaction factor
+0.2 and normalized by the operator's measured runtime, so expensive operators
+must earn their cost. The current solution returns to the incumbent best
+after 2000 non-improving iterations; after 500 consecutive rejections the
+search restarts from a randomized greedy solution and reheats.
+
+\subsection{Local-search polish}
+Insertion-based repairs never reorder a route, leaving travel time on the
+table. Whenever a new global best appears (rate-limited to twice per second),
+every route is compressed by \emph{Or-opt}: segments of one to three
+consecutive customers are relocated within the route if this strictly reduces
+travel and keeps the route feasible (first improvement, repeated to a fixed
+point). Or-opt changes no profit by itself; its value is the freed shift
+capacity, which a subsequent greedy pass immediately refills with additional
+customers. The search then continues from the compressed solution.
+
+% =========================================================================
+\section{Experimental Investigation of the Components}\label{sec:components}
+
+\subsection{Setup and evaluation metric}
+All experiments: one core of an Apple-silicon laptop, CPython~3.9, no
+third-party packages, 30\,s budget (component studies use 25\,s), seed~1
+unless stated. Quality is reported as profit or as \ub{}, the percentage of
+the singleton upper bound of Section~\ref{sec:problem}. Every reported
+solution passes the provided checker. Because single runs scatter by roughly
+$\pm$1\,\% per instance, we treat sub-percent single-seed differences as
+noise and base final conclusions on three seeds
+(Section~\ref{sec:overall}).
+
+\subsection{Move-evaluation throughput}\label{sec:exp-throughput}
+Table~\ref{tab:throughput} isolates the evaluation mechanisms of
+Section~\ref{sec:eval} on the largest instance. The naive framework cannot
+even leave its construction start: four iterations consume the entire
+budget. Quality tracks throughput almost mechanically --- the search
+components only become \emph{observable} once evaluation is cheap. This
+justifies our efficiency-first design order.
+
+\begin{table}[t]
+\centering\small
+\caption{Throughput ablation, instance n1000 (30\,s, seed 1).}
+\label{tab:throughput}
+\begin{tabular}{lrr}
+\toprule
+evaluation scheme & iterations & best profit \\
+\midrule
+naive suffix re-simulation                   & 4        & 30\,193 \\
+\; + early-exit deltas + move cache          & 517      & 33\,526 \\
+\; + slack fast path                          & $\approx$1\,000 & 35\,000+ \\
+\; + full final portfolio and polish          & 962      & 36\,239 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Destroy size}\label{sec:exp-size}
+Fixed destroy fractions are not robust: 15\,\% wins on n1000 but loses on
+n400, 6\,\% vice versa (Table~\ref{tab:size}, left). A single randomized
+range helps but still trades sizes off between instances. Making the size
+part of the \emph{operator identity} --- small and large variants of each
+geometric destroy, selected by the adaptive weights --- dominates both
+alternatives across seeds (right). The learned usage shares confirm the
+mechanism: on n400 the small variants are drawn 2--3$\times$ more often than
+the large ones, on n1000 the preference narrows.
+
+\begin{table}[t]
+\centering\small
+\caption{Left: fixed vs.\ randomized destroy fraction (25\,s). Right:
+size-split operator variants, two seeds (25\,s).}
+\label{tab:size}
+\begin{tabular}{lrrr@{\qquad}rr}
+\toprule
+ & \multicolumn{3}{c}{single range} & \multicolumn{2}{c}{size-split (s1 / s2)} \\
+instance & 0.15 & 0.06 & $U(0.04,0.18)$ & \multicolumn{2}{c}{} \\
+\midrule
+n100  & --      & --      & 2\,910\,$^{a}$ & \multicolumn{2}{c}{3\,020 / 3\,011} \\
+n400  & 12\,475 & 12\,824 & 12\,913 & \multicolumn{2}{c}{--} \\
+n600  & --      & --      & 20\,750$^{a}$ & \multicolumn{2}{c}{21\,098 / 20\,915} \\
+n1000 & 35\,355 & 34\,838 & 35\,032 & \multicolumn{2}{c}{36\,216 / 35\,929} \\
+\bottomrule
+\multicolumn{6}{l}{\footnotesize $^{a}$wide range $U(0.05,0.28)$, 30\,s benchmark configuration.}
+\end{tabular}
+\end{table}
+
+\subsection{Operator portfolio}
+\textbf{Correlated and solution-dependent removal.} The initial portfolio
+(random, static worst-density, skill-scarcity) lacked spatially correlated
+removals; the static density ranking moreover removes the same customers
+every iteration. Adding related removal and worst-detour removal improved
+every instance tested (n100: 2\,823$\to$2\,876; n250: 9\,450$\to$9\,787;
+n800: 24\,829$\to$25\,713) --- on mid and large instances the repair can only
+restructure a region if the destroy frees a coherent one.
+
+\textbf{Cheap sequential repair.} The best-first repairs re-select the global
+best candidate after every insertion; adding the single-pass sequential
+insertion roughly triples the attainable iteration count and let the adaptive
+weights trade care against throughput (n250: 9\,694$\to$9\,976; n1000:
+35\,610$\to$35\,808). Its usage share ends highest on \emph{every} instance
+(40--46\,\%), while regret-2 keeps a minor share --- adaptivity working as
+intended.
+
+\textbf{Candidate pool.} Repairing from the full unserved pool instead of the
+sampled 100 extras was tested and \emph{rejected}: on n850 the iteration
+count collapses (759$\to$214) and about 1\,000 profit is lost. At this budget
+throughput beats per-repair completeness.
+
+\subsection{Acceptance design}
+Replacing the solution-scaled $T_0$ by the move-scaled one and the
+iteration-based by the time-based schedule was worth roughly $+1.5$ points
+\ub{} on large instances (the n1000 best rose from 33\,526 to
+$\approx$35\,000 with identical operators); subsequent factor sweeps
+($T_0\in\{1,1.5,2\}\times$ mean profit) changed results by only about
+$\pm$1\,\%, i.e., the \emph{scale} matters, not the exact factor. The
+return-to-best intensification gave small but consistently non-negative
+changes.
+
+\subsection{Local-search polish and noised insertion}
+The final two components added $+0.3$ points \ub{} on average (single-seed
+spot checks: n100 2\,946$\to$3\,011, n1000 36\,016$\to$36\,239). Polishing
+pays because freed travel time converts into additional served customers via
+the refill pass; noise removes deterministic repair ruts at negligible cost.
+
+% =========================================================================
+\section{Overall Performance}\label{sec:overall}
+
+\subsection{Final results}
+Table~\ref{tab:final} reports the final configuration on all 20 benchmark
+instances with \textbf{three seeds each} (60 runs): every run passed the
+checker and finished within the limit (max.\ wall time 29.2\,s). The mean
+over seed means is \textbf{63.0\,\ub}. Seed spread is small (typically below
+1.5\,\% between min and max), so this figure is an \emph{expected} quality,
+not a lucky draw. The ALNS improves its greedy start by 17--36\,\%,
+underlining that the search --- not the construction --- carries the result.
+
+\begin{table}[t]
+\centering\small
+\caption{Final results: 30\,s, three seeds per instance. Greedy = multi-start
+construction; ALNS = mean profit over seeds; LNS = single-run baseline of
+Section~\ref{sec:baseline}.}
+\label{tab:final}
+\begin{tabular}{lrrrrrrr}
+\toprule
+instance & $n$ & $B$ & UB & greedy & ALNS & \ub & LNS \\
+\midrule
+n50\_s3\_k0.0   &   50 &  2 &  2\,717 &  1\,501 &  1\,796 & 66.1 &  1\,793 \\
+n75\_s4\_k0.5   &   75 &  2 &  4\,255 &  2\,058 &  2\,790 & 65.6 &  2\,784 \\
+n100\_s5\_k1.0  &  100 &  2 &  5\,160 &  2\,292 &  2\,996 & 58.1 &  3\,004 \\
+n125\_s6\_k1.5  &  125 &  3 &  6\,866 &  3\,697 &  4\,318 & 62.9 &  4\,223 \\
+n150\_s8\_k2.0  &  150 &  3 &  8\,259 &  4\,065 &  4\,861 & 58.9 &  4\,936 \\
+n200\_s3\_k0.0  &  200 &  5 & 10\,236 &  5\,504 &  7\,454 & 72.8 &  7\,487 \\
+n250\_s4\_k0.5  &  250 &  6 & 14\,034 &  7\,845 &  9\,795 & 69.8 &  9\,874 \\
+n300\_s5\_k1.0  &  300 &  7 & 16\,729 &  8\,331 & 11\,248 & 67.2 & 11\,450 \\
+n350\_s6\_k1.5  &  350 &  8 & 19\,050 &  9\,708 & 12\,581 & 66.0 & 12\,583 \\
+n400\_s8\_k2.0  &  400 & 10 & 22\,335 & 10\,426 & 12\,942 & 57.9 & 12\,741 \\
+n450\_s3\_k0.0  &  450 & 11 & 24\,478 & 11\,003 & 14\,271 & 58.3 & 14\,155 \\
+n500\_s4\_k0.5  &  500 & 12 & 27\,820 & 13\,344 & 17\,690 & 63.6 & 17\,620 \\
+n600\_s5\_k1.0  &  600 & 15 & 32\,477 & 16\,277 & 20\,734 & 63.8 & 21\,177 \\
+n700\_s6\_k1.5  &  700 & 17 & 37\,852 & 18\,732 & 23\,779 & 62.8 & 23\,758 \\
+n750\_s8\_k2.0  &  750 & 18 & 40\,329 & 19\,542 & 25\,376 & 62.9 & 25\,217 \\
+n800\_s3\_k0.0  &  800 & 20 & 43\,128 & 20\,995 & 25\,806 & 59.8 & 25\,491 \\
+n850\_s4\_k0.5  &  850 & 21 & 46\,190 & 21\,708 & 29\,629 & 64.1 & 29\,875 \\
+n900\_s5\_k1.0  &  900 & 22 & 49\,703 & 23\,101 & 28\,714 & 57.8 & 28\,660 \\
+n950\_s6\_k1.5  &  950 & 23 & 52\,946 & 22\,960 & 29\,391 & 55.5 & 29\,349 \\
+n1000\_s8\_k2.0 & 1000 & 25 & 54\,664 & 30\,193 & 36\,211 & 66.2 & 35\,781 \\
+\midrule
+average &&&&&& \textbf{63.0} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Comparison with a tuned single-trajectory LNS}\label{sec:baseline}
+As an internal yardstick we compare against an independently implemented,
+heavily optimized plain LNS developed earlier in the project (greedy
+construction; random, worst and related removal; full-pool greedy insertion;
+record-to-record-travel acceptance). Its best benchmark log reaches
+63.0\,\ub{} --- as a \emph{single run}. Our three-seed mean matches this
+figure, i.e., the expected quality of the ALNS equals the best observed run
+of the baseline. Head-to-head (our seed mean vs.\ the baseline's single run)
+the ALNS wins or ties 12 of 20 instances; on the largest instance every
+individual seed beats the baseline (36\,111--36\,268 vs.\ 35\,781). The
+comparison also validates the framework overhead: eight destroy and five
+repair operators with adaptive selection are fully amortized by the $O(1)$
+evaluation.
+
+\subsection{Development progression and scaling}
+Table~\ref{tab:progress} summarizes the average quality after each
+development stage --- a compact confirmation of the report's red thread:
+throughput first (61.0), then operator richness (62.2--62.7), then local
+search (63.0). Iteration counts at 30\,s range from $\approx$50{,}000
+($n{=}50$) to $\approx$1{,}000 ($n{=}1000$), yet \ub{} shows no systematic
+degradation with $n$: the hardest instances are those with scarce skills
+(suffixes k1.5/k2.0) and few couriers per skill, not the largest ones ---
+consistent with skill capacity, not geometry, being the binding resource.
+The solver degrades gracefully under small budgets: at 2\,s on $n{=}1000$ it
+still returns a feasible (partial greedy) solution within the limit.
+
+\begin{table}[t]
+\centering\small
+\caption{Average \ub{} over all 20 instances after each development stage
+(30\,s; final row: mean over three seeds).}
+\label{tab:progress}
+\begin{tabular}{lr}
+\toprule
+stage & avg.\ \ub \\
+\midrule
+faithful ALNS framework (naive evaluation)              & n/a (idle on large $n$) \\
++ slack fast path, move cache, time-based SA            & 61.0 \\
++ related \& worst-detour removal, candidate sampling   & 62.2 \\
++ sequential repair, size-split destroy operators       & 62.7 \\
++ Or-opt polish \& refill, noised insertion (final)     & \textbf{63.0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =========================================================================
+\section{Conclusion}
+
+We solved the prize-collecting Skill VRP with an ALNS whose design was driven
+by one empirical lesson: under a short wall-clock budget in interpreted
+Python, evaluation throughput is the primary bottleneck, and every search
+refinement only becomes effective after it is removed. Constant-time
+insertion feasibility via forward time slacks, per-route move caching and a
+wall-clock-based annealing schedule raised throughput by two orders of
+magnitude; on this foundation, a skill-aware operator portfolio with
+size-split destroy variants, cheap sequential repairs, and an Or-opt polish
+with capacity refill lifted the average quality to 63.0\,\% of the singleton
+upper bound as a three-seed mean --- with all 60 final runs feasible and on
+time, and matching the best single run of a heavily tuned LNS baseline.
+Promising next steps are string-based removals in the spirit of SISR
+\cite{christiaens2020}, a time-aware insertion score $p_c - \lambda\cdot
+\Delta\mathrm{travel}$ reflecting that shift time is the scarce resource, and
+a set-covering post-optimization over the route pool collected during the
+search \cite{hu2014}.
+
+% =========================================================================
+\begin{thebibliography}{19}\small
+
+\bibitem{cappanera2011} P.~Cappanera, L.~Gouveia, M.G.~Scutell\`a.
+The skill vehicle routing problem. \emph{Network Optimization} (INOC 2011),
+LNCS 6701, 354--364, 2011.
+
+\bibitem{christiaens2020} J.~Christiaens, G.~Vanden Berghe.
+Slack induction by string removals for vehicle routing problems.
+\emph{Transportation Science} 54(2), 417--433, 2020.
+
+\bibitem{cisse2017} M.~Ciss\'e, S.~Yal\c{c}{\i}nda\u{g}, Y.~Kergosien,
+E.~\c{S}ahin, C.~Lent\'e, A.~Matta. OR problems related to home health care:
+a review of relevant routing and scheduling problems.
+\emph{Operations Research for Health Care} 13--14, 1--22, 2017.
+
+\bibitem{gunawan2016} A.~Gunawan, H.C.~Lau, P.~Vansteenwegen.
+Orienteering problem: a survey of recent variants, solution approaches and
+applications. \emph{European Journal of Operational Research} 255(2),
+315--332, 2016.
+
+\bibitem{gunawan2017} A.~Gunawan, H.C.~Lau, P.~Vansteenwegen, K.~Lu.
+Well-tuned algorithms for the team orienteering problem with time windows.
+\emph{Journal of the Operational Research Society} 68(8), 861--876, 2017.
+
+\bibitem{hu2014} Q.~Hu, A.~Lim. An iterative three-component heuristic for
+the team orienteering problem with time windows.
+\emph{European Journal of Operational Research} 232(2), 276--286, 2014.
+
+\bibitem{kovacs2012} A.A.~Kovacs, S.N.~Parragh, K.F.~Doerner, R.F.~Hartl.
+Adaptive large neighborhood search for service technician routing and
+scheduling problems. \emph{Journal of Scheduling} 15(5), 579--600, 2012.
+
+\bibitem{labadie2012} N.~Labadie, R.~Mansini, J.~Melechovsk\'y,
+R.~Wolfler Calvo. The team orienteering problem with time windows: an
+LP-based granular variable neighborhood search.
+\emph{European Journal of Operational Research} 220(1), 15--27, 2012.
+
+\bibitem{pillac2013} V.~Pillac, C.~Gu\'eret, A.L.~Medaglia. A parallel
+matheuristic for the technician routing and scheduling problem.
+\emph{Optimization Letters} 7(7), 1525--1535, 2013.
+
+\bibitem{pisinger2007} D.~Pisinger, S.~Ropke. A general heuristic for
+vehicle routing problems. \emph{Computers \& Operations Research} 34(8),
+2403--2435, 2007.
+
+\bibitem{ropke2006} S.~Ropke, D.~Pisinger. An adaptive large neighborhood
+search heuristic for the pickup and delivery problem with time windows.
+\emph{Transportation Science} 40(4), 455--472, 2006.
+
+\bibitem{savelsbergh1992} M.W.P.~Savelsbergh. The vehicle routing problem
+with time windows: minimizing route duration.
+\emph{ORSA Journal on Computing} 4(2), 146--154, 1992.
+
+\bibitem{shaw1998} P.~Shaw. Using constraint programming and local search
+methods to solve vehicle routing problems. \emph{Principles and Practice of
+Constraint Programming} (CP 1998), LNCS 1520, 417--431, 1998.
+
+\bibitem{vansteenwegen2009} P.~Vansteenwegen, W.~Souffriau,
+G.~Vanden Berghe, D.~Van Oudheusden. Iterated local search for the team
+orienteering problem with time windows.
+\emph{Computers \& Operations Research} 36(12), 3281--3290, 2009.
+
+\bibitem{vansteenwegen2011} P.~Vansteenwegen, W.~Souffriau,
+D.~Van Oudheusden. The orienteering problem: a survey.
+\emph{European Journal of Operational Research} 209(1), 1--10, 2011.
+
+\bibitem{vidal2012} T.~Vidal, T.G.~Crainic, M.~Gendreau, N.~Lahrichi,
+W.~Rei. A hybrid genetic algorithm for multidepot and periodic vehicle
+routing problems. \emph{Operations Research} 60(3), 611--624, 2012.
+
+\bibitem{vidal2022} T.~Vidal. Hybrid genetic search for the CVRP:
+open-source implementation and SWAP* neighborhood.
+\emph{Computers \& Operations Research} 140, 105643, 2022.
+
+\end{thebibliography}
+
+\end{document}
