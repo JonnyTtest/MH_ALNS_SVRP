@@ -22,7 +22,6 @@ import time
 _START_TIME = time.perf_counter()
 
 
-
 # ===========================================================================
 # instance_reader.py (inlined)
 # ===========================================================================
@@ -355,23 +354,12 @@ class Solution:
             route_string = " ".join(map(str, route_with_depot))
             print(f"###VEHICLE {b + 1}: {route_string}")
 
-    def write_for_checker(self, path: str) -> None:
-        with open(path, "w", encoding="utf-8") as f:
-            print("###RESULT: Feasible", file=f)
-            print(f"###OBJECTIVE: {self.objective}", file=f)
-
-            for b, route in enumerate(self.routes):
-                route_with_depot = [0] + route + [0]
-                route_string = " ".join(map(str, route_with_depot))
-                print(f"###VEHICLE {b + 1}: {route_string}", file=f)
-
 
 # ===========================================================================
 # initial_solution.py (inlined)
 # ===========================================================================
 
 from dataclasses import dataclass
-
 
 
 @dataclass
@@ -442,32 +430,7 @@ def get_customer_order(inst, strategy: str) -> list[int]:
             reverse=True,
         )
 
-    if strategy == "density":
-        return sorted(
-            serviceable,
-            key=lambda c: inst.profit_density_lb[c],
-            reverse=True,
-        )
-
-    if strategy == "fewest_vehicles":
-        return sorted(
-            serviceable,
-            key=lambda c: (
-                len(inst.solo_feasible_vehicles[c]),
-                -inst.profit[c],
-            ),
-        )
-
-    if strategy == "hybrid":
-        return sorted(
-            serviceable,
-            key=lambda c: (
-                len(inst.solo_feasible_vehicles[c]),
-                -inst.profit_density_lb[c],
-                -inst.profit[c],
-                inst.min_required_time[c],
-            ),
-        )
+     # ...
 
     raise ValueError(f"Unknown greedy strategy: {strategy}")
 
@@ -493,55 +456,23 @@ def greedy_build_with_order(inst, customer_order: list[int]) -> Solution:
 
 def greedy_initial_solution(
     inst,
-    strategy: str = "multi_start",
+    strategy: str = "profit",
     verbose: bool = False,
 ) -> Solution:
 
-    if strategy != "multi_start":
-        order = get_customer_order(inst, strategy)
-        solution = greedy_build_with_order(inst, order)
-
-        if verbose:
-            print(f"Greedy strategy: {strategy}")
-            print(f"Objective: {solution.objective}")
-            print(f"Served customers: {inst.num_customers - len(solution.unserved)}/{inst.num_customers}")
-
-        return solution
-
-    strategies = [
-        "hybrid",
-        "profit",
-        "density",
-        "fewest_vehicles",
-    ]
-
-    best_solution = None
-    best_strategy = None
-
-    for current_strategy in strategies:
-        order = get_customer_order(inst, current_strategy)
-        solution = greedy_build_with_order(inst, order)
-
-        if verbose:
-            print(f"Greedy strategy: {current_strategy}")
-            print(f"  Objective: {solution.objective}")
-            print(f"  Served customers: {inst.num_customers - len(solution.unserved)}/{inst.num_customers}")
-
-        if best_solution is None or solution.objective > best_solution.objective:
-            best_solution = solution
-            best_strategy = current_strategy
+    order = get_customer_order(inst, strategy)
+    solution = greedy_build_with_order(inst, order)
 
     if verbose:
-        print()
-        print(f"Selected greedy strategy: {best_strategy}")
-        print(f"Best objective: {best_solution.objective}")
-        print(f"Served customers: {inst.num_customers - len(best_solution.unserved)}/{inst.num_customers}")
+        print(f"Greedy strategy: {strategy}")
+        print(f"Objective: {solution.objective}")
+        print(f"Served customers: {inst.num_customers - len(solution.unserved)}/{inst.num_customers}")
 
-    return best_solution
+    return solution
 
 
 # ===========================================================================
-# alns.py (inlined)
+# alns.py (main-body)
 # ===========================================================================
 
 from dataclasses import dataclass
@@ -549,8 +480,6 @@ import heapq
 import math
 import random
 import time
-
-
 
 
 # Parameterclasses
@@ -593,7 +522,6 @@ class ALNSParams:
     # Local-search polish: on a new global best (at most once per this many
     # seconds), Or-opt every route and refill freed capacity (0 = disabled).
     polish_interval_seconds: float = 0.0
-
 
 
 # Cached evaluation
@@ -742,40 +670,6 @@ def update_route_cache(
     solution.feasible = solution.total_penalty == 0.0
 
 
-def full_evaluate_solution(
-    inst,
-    solution: Solution,
-    penalties: PenaltyParams,
-) -> SolutionEvaluation:
-
-    penalty = 0.0
-    seen = set()
-
-    for vehicle, route in enumerate(solution.routes):
-        cache = build_route_cache(inst, vehicle, route, penalties)
-        penalty += cache.penalty
-
-        for customer in route:
-            if customer < 1 or customer > inst.num_customers:
-                penalty += penalties.skill_penalty
-            elif customer in seen:
-                penalty += penalties.skill_penalty
-            else:
-                seen.add(customer)
-
-    score = solution.objective - penalty
-
-
-    return SolutionEvaluation(
-        feasible=penalty == 0.0,
-        profit=solution.objective,
-        penalty=penalty,
-        score=score,
-        served_customers=len(seen),
-    )
-
-
-
 # Solution operations
 
 def remove_customer(solution: Solution, inst, customer: int) -> tuple[int, int]:
@@ -799,7 +693,6 @@ def apply_insertion(
     solution.customer_to_vehicle[move.customer] = move.vehicle
     solution.objective += inst.profit[move.customer]
     update_route_cache(inst, solution, move.vehicle, penalties)
-
 
 
 def served_customers(solution: Solution) -> list[int]:
@@ -840,7 +733,6 @@ def random_start_solution(
     return solution
 
 
-
 # Destroy / repair data
 
 @dataclass(slots=True)
@@ -861,7 +753,6 @@ class InsertionMove:
     delta_score: float
     travel_delta: int
     new_route_penalty: float
-
 
 
 # Operator base classes
@@ -940,7 +831,6 @@ class RepairOperator(ALNSOperator):
         raise NotImplementedError
 
 
-
 # Destroy helpers
 
 
@@ -998,7 +888,6 @@ def build_destroy_result(
     )
 
 
-
 ###########################################
 
 # Destroy operators
@@ -1040,10 +929,6 @@ class RandomRemoval(DestroyOperator):
         removed = rng.sample(served, q)
 
         return build_destroy_result(inst, solution, removed, "random_removal", penalties)
-
-
-
-
 
 
 class WorstDensityRemoval(DestroyOperator):
@@ -1163,7 +1048,6 @@ class SkillScarcityRemoval(DestroyOperator):
         removed = ranked[:q]
 
         return build_destroy_result(inst, solution, removed, "skill_scarcity_removal", penalties)
-
 
 
 class RelatedRemoval(DestroyOperator):
@@ -1592,136 +1476,12 @@ class TimeWindowSegmentRemoval(DestroyOperator):
         return build_destroy_result(inst, solution, removed, "time_segment_removal", penalties)
 
 
-# Segment-cache insertion evaluation
-
-
-def insertion_penalty_from_cache(
-    inst,
-    solution: Solution,
-    penalties: PenaltyParams,
-    customer: int,
-    vehicle: int,
-    position: int,
-) -> tuple[float, int]:
-
-    route = solution.routes[vehicle]
-    cache = solution.route_cache[vehicle]
-    distance = inst.distance
-    vehicle_skills = inst.vehicle_skills[vehicle]
-    m = len(route)
-
-    if position == 0:
-        previous = 0
-        time_now = inst.vehicle_start[vehicle]
-        penalty = 0.0
-    else:
-        previous = route[position - 1]
-        time_now = cache.departure[position - 1]
-        penalty = cache.prefix_penalty[position]
-
-    next_node = 0 if position == m else route[position]
-    travel_delta = (
-        distance[previous][customer]
-        + distance[customer][next_node]
-        - distance[previous][next_node]
-    )
-
-    if not inst.required_skills[customer].issubset(vehicle_skills):
-        penalty += penalties.skill_penalty
-
-    arrival = time_now + distance[previous][customer]
-
-    if arrival > inst.due[customer]:
-        penalty += penalties.time_window_penalty * (arrival - inst.due[customer])
-
-    time_now = max(arrival, inst.ready[customer]) + inst.service[customer]
-    previous = customer
-
-    departures = cache.departure
-    prefix_penalty = cache.prefix_penalty
-
-    for j in range(position, m):
-        if j > position:
-            # From here on the predecessor node equals the cached one, so once
-            # the timeline re-synchronizes the cached suffix applies verbatim.
-            cached_departure = departures[j - 1]
-
-            if time_now == cached_departure:
-                return penalty + (cache.penalty - prefix_penalty[j]), travel_delta
-
-            if time_now < cached_departure and cache.penalty == prefix_penalty[j]:
-                # Earlier timeline + penalty-free cached suffix: arrivals only
-                # get earlier, so the suffix stays penalty-free.
-                return penalty, travel_delta
-
-        suffix_customer = route[j]
-
-        if not inst.required_skills[suffix_customer].issubset(vehicle_skills):
-            penalty += penalties.skill_penalty
-
-        arrival = time_now + distance[previous][suffix_customer]
-
-        if arrival > inst.due[suffix_customer]:
-            penalty += penalties.time_window_penalty * (arrival - inst.due[suffix_customer])
-
-        time_now = max(arrival, inst.ready[suffix_customer]) + inst.service[suffix_customer]
-        previous = suffix_customer
-
-    end_time = time_now + distance[previous][0]
-
-    if end_time > inst.vehicle_end[vehicle]:
-        penalty += penalties.shift_penalty * (end_time - inst.vehicle_end[vehicle])
-
-    return penalty, travel_delta
-
-
-def insertion_move_for_position(
-    inst,
-    solution: Solution,
-    penalties: PenaltyParams,
-    customer: int,
-    vehicle: int,
-    position: int,
-) -> InsertionMove:
-    new_route_penalty, travel_delta = insertion_penalty_from_cache(
-        inst=inst,
-        solution=solution,
-        penalties=penalties,
-        customer=customer,
-        vehicle=vehicle,
-        position=position,
-    )
-
-    old_route_penalty = solution.route_cache[vehicle].penalty
-    additional_penalty = new_route_penalty - old_route_penalty
-
-    delta_score = inst.profit[customer] - additional_penalty
-
-    return InsertionMove(
-        customer=customer,
-        vehicle=vehicle,
-        position=position,
-        delta_score=delta_score,
-        travel_delta=travel_delta,
-        new_route_penalty=new_route_penalty,
-    )
-
-
 def insertion_sort_key(move: InsertionMove) -> tuple[float, int, float]:
     return (
         -move.delta_score,
         move.travel_delta,
         move.new_route_penalty,
     )
-
-
-def add_top_move(top_moves: list[InsertionMove], move: InsertionMove, k: int) -> None:
-
-    top_moves.append(move)
-    top_moves.sort(key=insertion_sort_key)
-
-    if len(top_moves) > k:
-        top_moves.pop()
 
 def build_repair_candidates(
     inst,
@@ -2229,7 +1989,6 @@ class Regret2InsertionRepair(RepairOperator):
         return solution
 
 
-
 class SequentialCheapestInsertionRepair(RepairOperator):
     """Single-pass repair (Kovacs et al. 2012 style): candidates are visited
     once in a fixed order (by profit, or shuffled) and each is immediately
@@ -2317,17 +2076,15 @@ class SequentialCheapestInsertionRepair(RepairOperator):
         return solution
 
 
-
 # --- Scanner infrastructure for the repair operators merged from alns.py ---
 # NoisyGreedyInsertionRepair and ScarceSkillFirstRepair below both rely on the
 # O(1)-slack insertion move, best_insertion_on_vehicle and the InsertionScanner
 # defined here, so this block is placed directly in front of those operators.
 #
-# The O(1) move is renamed slack_insertion_move_for_position to avoid clashing
-# with the penalty-cache insertion_move_for_position used by vehicle_top_moves /
-# MoveCache above. It uses the forward time slack, which build_route_cache only
-# fills for feasible routes -- during repair the partial solution is feasible,
-# so slack is always populated when these operators run.
+# slack_insertion_move_for_position uses the forward time slack, which
+# build_route_cache only fills for feasible routes -- during repair the
+# partial solution is feasible, so slack is always populated when these
+# operators run.
 
 
 def slack_insertion_move_for_position(
@@ -2488,17 +2245,6 @@ class InsertionScanner:
             return None
 
         return min(per_vehicle.values(), key=insertion_sort_key)
-
-    def best_two(self, customer: int) -> list[InsertionMove]:
-        """Best insertions on the two best DISTINCT couriers (regret over
-        couriers -- the meaningful regret for skill-scarce customers)."""
-        per_vehicle = self.moves.get(customer)
-
-        if not per_vehicle:
-            return []
-
-        ranked = sorted(per_vehicle.values(), key=insertion_sort_key)
-        return ranked[:2]
 
     def notify_insertion(self, applied_move: InsertionMove) -> None:
         """Call after apply_insertion: re-scan only the changed vehicle."""
@@ -2835,7 +2581,6 @@ def polish_and_fill(
     return polished
 
 
-
 # Operator selection and weight update
 
 
@@ -2884,7 +2629,6 @@ def operator_summary(operators: list[ALNSOperator]) -> list[dict]:
     return rows
 
 
-
 # Simulated Annealing
 
 def accept_sa(
@@ -2916,8 +2660,6 @@ class ALNSResult:
 
     destroy_summary: list[dict]
     repair_summary: list[dict]
-
-
 
 
 ##################################
@@ -3553,8 +3295,7 @@ class TemporalShawRemoval(DestroyOperator):
 
 
 def scanner_best_k(scanner: InsertionScanner, customer: int, k: int) -> list[InsertionMove]:
-    """Best insertions on the k best DISTINCT couriers (generalizes
-    InsertionScanner.best_two to arbitrary k)."""
+    """Best insertions on the k best DISTINCT couriers."""
     per_vehicle = scanner.moves.get(customer)
 
     if not per_vehicle:
@@ -4140,18 +3881,7 @@ def make_operators(inst):
 def solve(inst, time_limit: float) -> Solution:
     deadline = _START_TIME + time_limit - OUTPUT_MARGIN_SECONDS
 
-    # Multi-Start-Greedy mit Deadline: baut nacheinander die vier
-    # Greedy-Strategien (gleiche Reihenfolge wie im Benchmark) und behaelt
-    # die beste. Bricht ab, sobald das Zeitbudget aufgebraucht ist --
-    # mindestens eine Loesung wird immer gebaut, damit die Ausgabe auch bei
-    # sehr kleinen Timeouts feasible ist.
-    start_solution = None
-    for strategy in ("hybrid", "profit", "density", "fewest_vehicles"):
-        if start_solution is not None and time.perf_counter() >= deadline:
-            break
-        candidate = greedy_initial_solution(inst, strategy=strategy, verbose=False)
-        if start_solution is None or candidate.objective > start_solution.objective:
-            start_solution = candidate
+    start_solution = greedy_initial_solution(inst, strategy="profit", verbose=False)
 
     remaining = deadline - time.perf_counter()
     if remaining <= 0.5:
