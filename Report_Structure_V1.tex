@@ -1,0 +1,173 @@
+% =========================================================================
+% Metaheuristics Project (31-MM34, SoSe 26) -- Report Structure (V1)
+% Skeleton only: sections, subsections and one-line content notes.
+% The full text lives in Report_Full_V1.tex (identical structure).
+% Compile: pdflatex Report_Structure_V1.tex
+% =========================================================================
+\documentclass[10pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\title{An Adaptive Large Neighborhood Search for the\\
+       Prize-Collecting Skill Vehicle Routing Problem}
+\author{Umais Chaudhary, Rehman Kerimov, Dustin Schulz, Marco Leander vom Orde \\
+        \small 31-MM34 Metaheuristics, SoSe 26, Bielefeld University}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% ~130 words. Problem (selective routing + skills + time windows + shifts,
+% short CPython budget); development path: literature -> ALNS; tuned LNS
+% baseline as yardstick (63.0% UB at 30 s); modular ALNS with 14 destroy /
+% 9 repair operators, penalized SA acceptance, time-based cooling,
+% runtime-normalized adaptive weights; grid search + leave-one-out ablation
+% (every operator contributes); headline results (matches/beats baseline at
+% equal budget; 65.5% UB average in 10-minute runs, all runs feasible).
+\end{abstract}
+
+% Mapping to the four components required by the project description
+% (31-MM34, "Submission document"):
+%   1. Approach description                      -> Sections 2 and 4
+%   2. Citations / discussion of related work    -> Section 3
+%   3. Experimental investigation: components    -> Section 5  (!!!)
+%   4. Experimental investigation: overall perf. -> Section 6  (!!!)
+% No code in the document; pseudocode (Algorithm 1) in course-slides style.
+
+% -------------------------------------------------------------------------
+\section{Introduction}
+% Motivation (pharmacy home delivery). Problem features: optional customers,
+% skills, time windows, shifts; hard wall-clock budget in pure Python.
+% Red thread of the report = development path: (i) evidence from the
+% literature fixes the method family, (ii) a strong-but-simple LNS baseline
+% fixes the yardstick, (iii) engineering makes evaluation cheap, (iv) breadth
+% of operators is added and then *measured* (grid search, ablation, weight
+% tracking) rather than argued. Contributions list.
+
+% -------------------------------------------------------------------------
+\section{Problem Statement}
+% Formal definition: customers C, couriers B; profits, service times, time
+% windows, shifts, skill sets; rounded Euclidean travel times; objective;
+% feasibility rules. Singleton upper bound UB as evaluation yardstick and
+% its limitations.
+
+% -------------------------------------------------------------------------
+\section{Related Work and Choice of Method}
+\subsection{Problem classification}
+% Orienteering family / TOPTW at the routing core; Skill VRP and technician
+% routing (TRSP) for the skill aspect; NP-hardness.
+\subsection{Metaheuristics for selective routing with time windows}
+% ILS (Vansteenwegen), granular VNS (Labadie), I3CH (Hu & Lim), tuned ILS/SA
+% (Gunawan); forward time slack as the shared efficiency idea.
+\subsection{LNS, ALNS and population methods}
+% Shaw; Ropke & Pisinger; SISR; ALNS for the TRSP (Kovacs); HGS (Vidal) and
+% why it fits poorly here (customer selection + hard feasibility filters).
+\subsection{Synthesis}
+% Both closest problem families point to destroy-and-repair search with
+% insertion-based repair and annealing acceptance -> ALNS; reinforced by the
+% short interpreted-Python budget.
+
+% -------------------------------------------------------------------------
+\section{Approach Description}
+\subsection{Development path and baseline LNS}
+% Milestone-driven development. Baseline solver skillvrp+.py: multi-start
+% greedy insertion + LNS with record-to-record acceptance; iteratively tuned
+% from 61.8 to 63.0% UB (30 s benchmark logs). Role: independent yardstick
+% so every ALNS design decision is measured, not argued.
+\subsection{Framework overview}
+% Algorithm 1 (package-free tabbing figure): weighted operator selection,
+% penalized SA acceptance, time-based cooling, segment-wise weight updates,
+% restart + reheat after stagnation, optional polish hook.
+\subsection{Preprocessing and construction heuristic}
+% Distance matrix; per-customer solo-feasible courier lists (skill filter +
+% singleton tour check); profit-density bound. Multi-start greedy insertion
+% with four orderings (hybrid / profit / density / fewest couriers).
+\subsection{Destroy operators}
+% 14 operators in five groups: random; cost-based (worst-density,
+% worst-detour v1/v2, largest-saving); relatedness-based (related, Shaw,
+% temporal Shaw, cluster); structural (route, sequence, time-window
+% segment); history-based; problem-specific skill-scarcity removal.
+% Destroy size sampled per call from fraction ranges.
+\subsection{Repair operators}
+% 9 operators: greedy best-first, regret-2, regret-3 (courier-level),
+% sequential cheapest (profit order), noised greedy, scarce-skill-first,
+% last-removed-first-inserted, random-position, Shaw insertion.
+% Candidate set = removed customers + capped sample of unserved extras.
+\subsection{Efficient move evaluation}
+% Route caches with forward time slacks -> O(1) insertion feasibility;
+% per-(customer, vehicle) move cache with per-route invalidation; penalized
+% evaluation (time-window/shift penalties, prohibitive skill penalty).
+\subsection{Acceptance, adaptivity and restarts}
+% Move-scaled T0 (factor x 100), time-based exponential cooling, scores
+% 25/10/3/0, runtime-normalized weight updates, minimum weight, restart from
+% randomized greedy + reheat after 700 rejections; Or-opt polish-and-refill
+% hook (grid search disabled it in the final configuration).
+
+% -------------------------------------------------------------------------
+\section{Experimental Investigation of the Components}
+\subsection{Setup and evaluation metric}
+% 20 provided instances (50-1000 customers, 2-25 couriers, 3-8 skills,
+% skill parameter k in {0,...,2}); pure heuristic Python, no exact-solver
+% components, no third-party packages; conformance to the required command
+% line (python3 skillvrp.py <instance> <timeout>) and output format; empty
+% plan as always-feasible fallback; checker.py validation; %UB metric;
+% seeds and noise level.
+\subsection{Initial solution quality}
+% Grading criterion "initial solution heuristic": multi-start greedy reaches
+% 49.5% UB on average (range 43-56); no single ordering dominates ->
+% best-of-four; weakness = myopic customer selection, corrected by the
+% search (+20-47% per instance); also the restart fallback.
+\subsection{Parameter grid search}
+% 30 s runs on three representative instances x 2 seeds; searched dimensions
+% (temperature factor, destroy-size profile, candidate-pool cap, ...);
+% result: robust plateau, small destroy profile wins; final configuration
+% table.
+\subsection{Operator ablation study}
+% Leave-one-out over all 23 operators, 3 instances x 2 seeds x 90 s; table
+% of average/worst impact; findings: every operator contributes on average;
+% ranking (worst-detour v2 and Shaw-related most valuable; skill-scarcity
+% validates the problem-specific design); why the long tail is kept.
+\subsection{Adaptive behavior}
+% Weight-trajectory tracking per segment; final weights on n1000 (worst
+% detour, regret-3, largest saving on top); convergence of best-solution
+% timeline; evidence that adaptivity prices operators correctly.
+
+% -------------------------------------------------------------------------
+\section{Overall Performance}
+\subsection{Comparison with the tuned LNS baseline at equal budget}
+% 30 s head-to-head on the tuning instances: ALNS matches or beats the
+% baseline (small table); interpretation w.r.t. framework overhead.
+\subsection{Long-run results}
+% 10-minute runs on all 20 instances (table): UB, greedy start, ALNS best,
+% %UB, time of last improvement, iterations; 65.5% UB average; all runs
+% feasible; improvement over greedy 20-47%.
+\subsection{Convergence and scaling}
+% Time-to-best grows with n (small instances converge < 40 s, large ones
+% improve until the end); iteration counts; no systematic %UB degradation
+% with n; hardness correlates with skill scarcity and courier availability;
+% honest notes (single instance where the baseline stays ahead).
+
+% -------------------------------------------------------------------------
+\section{Conclusion}
+% Summary of path and results; main lessons (yardstick first, throughput
+% before operator richness, measure everything); future work: SISR string
+% removals, time-aware insertion scoring, set-covering post-optimization
+% over the collected route pool.
+
+% -------------------------------------------------------------------------
+\begin{thebibliography}{99}
+% ~17 entries: Shaw 1998; Ropke & Pisinger 2006; Pisinger & Ropke 2007;
+% Savelsbergh 1992; Vansteenwegen et al. 2009/2011; Labadie et al. 2012;
+% Hu & Lim 2014; Gunawan et al. 2016/2017; Cappanera et al. 2011;
+% Kovacs et al. 2012; Pillac et al. 2013; Cisse et al. 2017;
+% Christiaens & Vanden Berghe 2020; Vidal et al. 2012/2022.
+\end{thebibliography}
+
+\end{document}
