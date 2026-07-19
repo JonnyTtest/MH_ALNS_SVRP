@@ -1,0 +1,129 @@
+% =========================================================================
+% Metaheuristics Project (31-MM34, SoSe 26) -- Report Structure
+% Compile: pdflatex Report_Structure_V0.tex
+% =========================================================================
+\documentclass[10pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\title{An Adaptive Large Neighborhood Search for the\\
+       Prize-Collecting Skill Vehicle Routing Problem}
+\author{Umais Chaudhary, Rehman Kerimov, Dustin Schulz, Marco Leander vom Orde \\ \small 31-MM34 Metaheuristics, SoSe 26, Bielefeld University}
+\date{Juli 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% ~120 words: problem, chosen method (ALNS), key engineering insight
+% (evaluation efficiency dominates in Python at 30s), headline result
+% (63.0% of singleton UB as 3-seed mean, all feasible, on par with a
+% heavily tuned single-trajectory LNS baseline).
+\end{abstract}
+
+% -------------------------------------------------------------------------
+\section{Introduction}
+% Motivation (pharmacy home delivery), problem features: optional customers,
+% skills, time windows, shifts; 30s CPython budget.
+% Red thread: literature -> ALNS is the right family; the actual battle is
+% move-evaluation throughput; design principle "efficiency first, then
+% operator richness". Contributions bullet list.
+
+% -------------------------------------------------------------------------
+\section{Problem Statement}
+% Formal definition: sets C, B; profits, service times, time windows,
+% shifts, skill sets; objective (1); feasibility rules; rounded Euclidean
+% travel times. Singleton upper bound UB used as evaluation yardstick.
+
+% -------------------------------------------------------------------------
+\section{Related Work}
+\subsection{Problem classification}
+% TOPTW at the routing core; Skill VRP / technician routing for the skill
+% aspect; NP-hardness.
+\subsection{Metaheuristics for selective routing with time windows}
+% ILS (Vansteenwegen), granular VNS (Labadie), I3CH (Hu & Lim), tuned
+% ILS/SA (Gunawan); forward time slack as shared efficiency idea.
+\subsection{LNS, ALNS and population methods}
+% Shaw; Ropke & Pisinger; SISR; ALNS for TRSP (Kovacs); HGS (Vidal) and why
+% it fits poorly here (selection + hard feasibility).
+\subsection{Synthesis}
+% Why ALNS with skill-aware insertion and SA acceptance is the evidence-
+% backed choice under a short Python time budget.
+
+% -------------------------------------------------------------------------
+\section{Solution Approach}
+\subsection{Framework overview}
+% Pipeline + Algorithm 1 as package-free tabbing figure
+% (ALNS main loop, time-based cooling, polish hook).
+\subsection{Preprocessing and construction heuristic}
+% Distance matrix, per-customer feasible-courier lists (skills + singleton
+% time feasibility), profit-density bound; multi-start greedy insertion
+% with four orderings.
+\subsection{Destroy operators}
+% Random, related (Shaw), worst-detour, worst-density, skill-scarcity;
+% destroy size as part of operator identity (small/large variants).
+\subsection{Repair operators}
+% Greedy best-first, regret-2, sequential cheapest insertion
+% (profit/random order), noised variant; candidate sampling
+% (removed + top-density + random extras).
+\subsection{Efficient move evaluation}
+% The key enabler: (i) forward time slack -> O(1) feasibility,
+% (ii) per-(customer,vehicle) move cache with per-route invalidation,
+% (iii) early-exit suffix evaluation as fallback. Differential testing.
+\subsection{Acceptance, adaptivity and intensification}
+% SA with time-based cooling; T0 scaled to move deltas; adaptive weights
+% normalized by operator runtime; return-to-best; randomized restarts.
+\subsection{Local-search polish}
+% Or-opt segment relocation + greedy refill of freed shift capacity on new
+% global bests.
+
+% -------------------------------------------------------------------------
+\section{Experimental Investigation of the Components}
+\subsection{Setup and evaluation metric}
+% Hardware, CPython 3.9, 30s budget, seeds; %UB metric definition.
+\subsection{Move-evaluation throughput}
+% Ablation table on n1000: naive vs. +cache/early-exit vs. +slack fast path;
+% quality follows throughput.
+\subsection{Destroy size}
+% Fixed vs. randomized fraction; size-split operator variants (table).
+\subsection{Operator portfolio}
+% Effect of related/worst-detour removal; effect of sequential repair;
+% adaptive usage shares; full candidate pool tested and rejected.
+\subsection{Acceptance design}
+% T0 scale and time-based schedule; sensitivity remarks.
+\subsection{Local-search polish and noised insertion}
+% Marginal gains of the final two components.
+
+% -------------------------------------------------------------------------
+\section{Overall Performance}
+\subsection{Final results}
+% 20-instance table: UB, greedy start, ALNS 3-seed mean, %UB, baseline LNS.
+\subsection{Comparison with a tuned single-trajectory LNS}
+% Baseline description; expected-quality vs. lucky-run argument; 12/20
+% wins/ties; n1000 dominated on every seed.
+\subsection{Development progression and scaling}
+% 61.0 -> 63.0 progression table; iteration counts vs. n; hardness driven
+% by skill scarcity, not size; small-time-limit robustness.
+
+% -------------------------------------------------------------------------
+\section{Conclusion}
+% Summary; main lesson (throughput-first engineering enables the adaptive
+% framework); future work: SISR string removals, time-aware insertion
+% scoring, set-covering post-optimization.
+
+% -------------------------------------------------------------------------
+\begin{thebibliography}{99}
+% ~16 entries: Shaw 1998; Ropke & Pisinger 2006; Pisinger & Ropke 2007;
+% Savelsbergh 1992; Vansteenwegen et al. 2009/2011; Labadie et al. 2012;
+% Hu & Lim 2014; Gunawan et al. 2016/2017; Cappanera et al. 2011;
+% Kovacs et al. 2012; Pillac et al. 2013; Cisse et al. 2017;
+% Christiaens & Vanden Berghe 2020; Vidal et al. 2012/2022.
+\end{thebibliography}
+
+\end{document}
