@@ -1,0 +1,230 @@
+======================================================================
+ABLATIONSSTUDIE
+Instanzen: 3  |  Seeds: [0, 1]  |  Runtime: 90.0s/Lauf
+======================================================================
+Geladen: skillvrp_n100_v2_s5_k1.0_3.txt  (100 Kunden)
+Geladen: skillvrp_n450_v11_s3_k0.0_11.txt  (450 Kunden)
+Geladen: skillvrp_n1000_v25_s8_k2.0_20.txt  (1000 Kunden)
+
+--- BASELINE (alle Operatoren) ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3017
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3006
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14626
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14641
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36884
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37542
+
+--- DESTROY ablation [1/23]: ohne 'random_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3006  vs_baseline=-0.4%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3050  vs_baseline=+1.5%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14529  vs_baseline=-0.7%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14558  vs_baseline=-0.6%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36757  vs_baseline=-0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37289  vs_baseline=-0.7%
+
+--- DESTROY ablation [2/23]: ohne 'worst_density_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3050  vs_baseline=+1.1%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3006  vs_baseline=+0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14538  vs_baseline=-0.6%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14679  vs_baseline=+0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36683  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37107  vs_baseline=-1.2%
+
+--- DESTROY ablation [3/23]: ohne 'skill_scarcity_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3050  vs_baseline=+1.1%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3006  vs_baseline=+0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14469  vs_baseline=-1.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14417  vs_baseline=-1.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36331  vs_baseline=-1.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36935  vs_baseline=-1.6%
+
+--- DESTROY ablation [4/23]: ohne 'related_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3031  vs_baseline=+0.5%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3001  vs_baseline=-0.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14504  vs_baseline=-0.8%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14695  vs_baseline=+0.4%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 37254  vs_baseline=+1.0%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36793  vs_baseline=-2.0%
+
+--- DESTROY ablation [5/23]: ohne 'worst_detour_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2979  vs_baseline=-1.3%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3002  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14520  vs_baseline=-0.7%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14408  vs_baseline=-1.6%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 37124  vs_baseline=+0.7%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37017  vs_baseline=-1.4%
+
+--- DESTROY ablation [6/23]: ohne 'worst_detour_removal_v2' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3006  vs_baseline=-0.4%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  2958  vs_baseline=-1.6%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14376  vs_baseline=-1.7%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14538  vs_baseline=-0.7%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36447  vs_baseline=-1.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 35788  vs_baseline=-4.7%
+
+--- DESTROY ablation [7/23]: ohne 'shaw_related_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2960  vs_baseline=-1.9%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3041  vs_baseline=+1.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14464  vs_baseline=-1.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14471  vs_baseline=-1.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36610  vs_baseline=-0.7%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36471  vs_baseline=-2.9%
+
+--- DESTROY ablation [8/23]: ohne 'route_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3001  vs_baseline=-0.5%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3001  vs_baseline=-0.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14619  vs_baseline=-0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14583  vs_baseline=-0.4%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36735  vs_baseline=-0.4%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37053  vs_baseline=-1.3%
+
+--- DESTROY ablation [9/23]: ohne 'time_segment_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2972  vs_baseline=-1.5%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3050  vs_baseline=+1.5%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14613  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14563  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36421  vs_baseline=-1.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36760  vs_baseline=-2.1%
+
+--- DESTROY ablation [10/23]: ohne 'sequence_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3002  vs_baseline=-0.5%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3002  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14608  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14626  vs_baseline=-0.1%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36792  vs_baseline=-0.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36988  vs_baseline=-1.5%
+
+--- DESTROY ablation [11/23]: ohne 'cluster_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3040  vs_baseline=+0.8%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  2990  vs_baseline=-0.5%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14495  vs_baseline=-0.9%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14476  vs_baseline=-1.1%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36760  vs_baseline=-0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36798  vs_baseline=-2.0%
+
+--- DESTROY ablation [12/23]: ohne 'largest_saving_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3030  vs_baseline=+0.4%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3004  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14423  vs_baseline=-1.4%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14498  vs_baseline=-1.0%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36587  vs_baseline=-0.8%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36454  vs_baseline=-2.9%
+
+--- DESTROY ablation [13/23]: ohne 'temporal_shaw_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2990  vs_baseline=-0.9%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3002  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14529  vs_baseline=-0.7%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14618  vs_baseline=-0.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36716  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36930  vs_baseline=-1.6%
+
+--- DESTROY ablation [14/23]: ohne 'history_based_removal' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2978  vs_baseline=-1.3%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3006  vs_baseline=+0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14831  vs_baseline=+1.4%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14516  vs_baseline=-0.9%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 37084  vs_baseline=+0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37417  vs_baseline=-0.3%
+
+--- REPAIR ablation [15/23]: ohne 'greedy_best_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2991  vs_baseline=-0.9%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3021  vs_baseline=+0.5%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14455  vs_baseline=-1.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14606  vs_baseline=-0.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36245  vs_baseline=-1.7%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37502  vs_baseline=-0.1%
+
+--- REPAIR ablation [16/23]: ohne 'regret2_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3050  vs_baseline=+1.1%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  2978  vs_baseline=-0.9%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14499  vs_baseline=-0.9%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14549  vs_baseline=-0.6%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 37109  vs_baseline=+0.6%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 36831  vs_baseline=-1.9%
+
+--- REPAIR ablation [17/23]: ohne 'sequential_insertion_profit' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3011  vs_baseline=-0.2%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3030  vs_baseline=+0.8%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14415  vs_baseline=-1.4%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14591  vs_baseline=-0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36908  vs_baseline=+0.1%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37062  vs_baseline=-1.3%
+
+--- REPAIR ablation [18/23]: ohne 'noisy_greedy_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2983  vs_baseline=-1.1%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  2970  vs_baseline=-1.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14645  vs_baseline=+0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14570  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36991  vs_baseline=+0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37713  vs_baseline=+0.5%
+
+--- REPAIR ablation [19/23]: ohne 'scarce_skill_first_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  2986  vs_baseline=-1.0%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3010  vs_baseline=+0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14575  vs_baseline=-0.3%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14572  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 37315  vs_baseline=+1.2%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37041  vs_baseline=-1.3%
+
+--- REPAIR ablation [20/23]: ohne 'lrfi_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3004  vs_baseline=-0.4%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3006  vs_baseline=+0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14623  vs_baseline=-0.0%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14700  vs_baseline=+0.4%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36848  vs_baseline=-0.1%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37187  vs_baseline=-0.9%
+
+--- REPAIR ablation [21/23]: ohne 'regret3_courier_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3006  vs_baseline=-0.4%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3001  vs_baseline=-0.2%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14568  vs_baseline=-0.4%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14583  vs_baseline=-0.4%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36985  vs_baseline=+0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37412  vs_baseline=-0.3%
+
+--- REPAIR ablation [22/23]: ohne 'random_position_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3041  vs_baseline=+0.8%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  2991  vs_baseline=-0.5%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14673  vs_baseline=+0.3%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14509  vs_baseline=-0.9%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36977  vs_baseline=+0.3%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37065  vs_baseline=-1.3%
+
+--- REPAIR ablation [23/23]: ohne 'shaw_insertion' ---
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=0  profit=  3041  vs_baseline=+0.8%
+  skillvrp_n100_v2_s5_k1.0_3.txt  seed=1  profit=  3002  vs_baseline=-0.1%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=0  profit= 14429  vs_baseline=-1.3%
+  skillvrp_n450_v11_s3_k0.0_11.t  seed=1  profit= 14509  vs_baseline=-0.9%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=0  profit= 36709  vs_baseline=-0.5%
+  skillvrp_n1000_v25_s8_k2.0_20.  seed=1  profit= 37610  vs_baseline=+0.2%
+
+Details gespeichert: C:\Users\dusti\Desktop\Metaheuristics\ablation_results\ablation_results.csv
+
+======================================================================
+ZUSAMMENFASSUNG — Einfluss je Operator (negativer Wert = schadet mehr)
+======================================================================
+Operator                            Typ      Ø Auswirkung Schlimmster Fall
+----------------------------------------------------------------------
+worst_detour_removal_v2             destroy         -1.7%            -4.7%
+shaw_related_removal                destroy         -1.1%            -2.9%
+largest_saving_removal              destroy         -0.9%            -2.9%
+skill_scarcity_removal              destroy         -0.8%            -1.6%
+worst_detour_removal                destroy         -0.7%            -1.6%
+cluster_removal                     destroy         -0.7%            -2.0%
+time_segment_removal                destroy         -0.7%            -2.1%
+temporal_shaw_removal               destroy         -0.7%            -1.6%
+greedy_best_insertion               repair          -0.6%            -1.7%
+route_removal                       destroy         -0.5%            -1.3%
+regret2_insertion                   repair          -0.4%            -1.9%
+sequence_removal                    destroy         -0.4%            -1.5%
+sequential_insertion_profit         repair          -0.4%            -1.4%
+noisy_greedy_insertion              repair          -0.3%            -1.2%
+scarce_skill_first_insertion        repair          -0.3%            -1.3%
+shaw_insertion                      repair          -0.3%            -1.4%
+regret3_courier_insertion           repair          -0.2%            -0.4%
+random_position_insertion           repair          -0.2%            -1.3%
+random_removal                      destroy         -0.2%            -0.7%
+related_removal                     destroy         -0.2%            -2.0%
+lrfi_insertion                      repair          -0.2%            -0.9%
+worst_density_removal               destroy         -0.2%            -1.2%
+history_based_removal               destroy         -0.1%            -1.3%
